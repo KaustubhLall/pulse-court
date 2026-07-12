@@ -238,6 +238,27 @@ void test_wall_bounce() {
           "score unchanged after wall bounce");
 }
 
+void test_wall_bounce_no_false_event() {
+    // Core starts slightly outside a non-goal side wall but is already moving
+    // inward. Position should be corrected, but velocity should be preserved
+    // and no CoreBounce event should be emitted.
+    Simulation sim;
+    GameState s = sim.state();
+    s.phase = Phase::Live;
+    s.kickoff_remaining = 0;
+    s.core.position = {kCoreRadius - 10, 1000};  // slightly past left wall
+    s.core.velocity = {100, 0};  // moving inward (rightward)
+    sim.set_state(s);
+    StepEvents events{};
+    StepResult r = sim.step({}, &events);
+    check(sim.state().core.velocity.x > 0,
+          "inward velocity is preserved when core starts outside wall");
+    check(sim.state().core.position.x >= kCoreRadius,
+          "core position is corrected to legal court");
+    check(events.count == 0,
+          "no CoreBounce event when core is already moving inward");
+}
+
 void test_no_tunneling() {
     Simulation sim;
     GameState s = sim.state();
@@ -579,6 +600,304 @@ void test_replay() {
     std::remove(path.c_str());
 }
 
+void test_court_geometry() {
+    // Verify 38x22 court dimensions and goal mouth positions.
+    check(kFieldWidth == 38 * kFixedScale, "field width is 38 units");
+    check(kFieldHeight == 22 * kFixedScale, "field height is 22 units");
+    check(kGoalTop == 8 * kFixedScale, "goal top is y=8");
+    check(kGoalBottom == 14 * kFixedScale, "goal bottom is y=14");
+
+    // Verify symmetric reset positions.
+    Simulation sim;
+    GameState s = sim.state();
+    check(s.core.position.x == kFieldHalfX, "core resets at center x");
+    check(s.core.position.y == kFieldHalfY, "core resets at center y");
+    check(s.players[0].position.x == kFieldWidth / 4,
+          "player 0 resets at quarter width");
+    check(s.players[0].position.y == kFieldHalfY,
+          "player 0 resets at center y");
+    check(s.players[1].position.x == 3 * kFieldWidth / 4,
+          "player 1 resets at three-quarter width");
+    check(s.players[1].position.y == kFieldHalfY,
+          "player 1 resets at center y");
+}
+
+void test_decision_boundary() {
+    // 10 Hz decision boundary: tick 0 is false, 12/24 are true.
+    check(!is_decision_tick(0), "tick 0 is not a decision boundary");
+    check(is_decision_tick(12), "tick 12 is a decision boundary");
+    check(is_decision_tick(24), "tick 24 is a decision boundary");
+    check(!is_decision_tick(6), "tick 6 is not a decision boundary");
+    check(!is_decision_tick(18), "tick 18 is not a decision boundary");
+
+    // Verify StepEvents populates decision_boundary correctly.
+    Simulation sim;
+    GameState s = sim.state();
+    s.phase = Phase::Live;
+    s.kickoff_remaining = 0;
+    sim.set_state(s);
+
+    StepEvents events;
+    sim.step({}, &events);
+    check(events.tick == 1, "events tick is 1");
+    check(!events.decision_boundary, "tick 1 has no decision boundary");
+
+    // Advance to tick 12 and capture events at tick 12.
+    for (int i = 0; i < 10; ++i) sim.step({});
+    sim.step({}, &events);
+    check(events.tick == 12, "events tick is 12");
+    check(events.decision_boundary, "tick 12 has decision boundary");
+}
+
+void test_action_events() {
+    // Test StrikeStarted, DashStarted, AbilityActivated events.
+    Simulation sim;
+    GameState s = sim.state();
+    s.phase = Phase::Live;
+    s.kickoff_remaining = 0;
+    s.players[0].position = {kFieldWidth / 4, kFieldHalfY};
+    s.players[0].facing = {kFixedScale, 0};
+    s.players[0].strike_cooldown = 0;
+    s.players[0].dash_cooldown = 0;
+    s.players[0].ability_cooldown = 0;
+    sim.set_state(s);
+
+    // StrikeStarted event.
+    StepEvents events;
+    std::array<FrameInput, 2> in = {};
+    in[0].buttons = ButtonStrike;
+    sim.step(in, &events);
+    check(events.count == 1, "strike emits one event");
+    check(events.events[0].type == SimulationEventType::StrikeStarted,
+          "strike emits StrikeStarted");
+    check(events.events[0].actor == 0, "strike event has correct actor");
+
+    // DashStarted event.
+    s = sim.state();
+    s.players[0].dash_cooldown = 0;
+    sim.set_state(s);
+    events = StepEvents{};
+    in[0].buttons = ButtonDash;
+    sim.step(in, &events);
+    check(events.count == 1, "dash emits one event");
+    check(events.events[0].type == SimulationEventType::DashStarted,
+          "dash emits DashStarted");
+    check(events.events[0].actor == 0, "dash event has correct actor");
+
+    // AbilityActivated events for all three characters.
+    for (Character c : {Character::Kite, Character::Vale, Character::Bastion}) {
+        Simulation sim2;
+        GameState s2 = sim2.state();
+        s2.phase = Phase::Live;
+        s2.kickoff_remaining = 0;
+        s2.players[0].character = c;
+        s2.players[0].position = {kFieldWidth / 4, kFieldHalfY};
+        s2.players[0].facing = {kFixedScale, 0};
+        s2.players[0].ability_cooldown = 0;
+        sim2.set_state(s2);
+        events = StepEvents{};
+        in[0].buttons = ButtonAbility;
+        sim2.step(in, &events);
+        check(events.count == 1, "ability emits one event");
+        check(events.events[0].type == SimulationEventType::AbilityActivated,
+              "ability emits AbilityActivated");
+        check(events.events[0].actor == 0, "ability event has correct actor");
+    }
+
+    // Cooldown-blocked ability produces no AbilityActivated event.
+    {
+        Simulation sim2;
+        GameState s2 = sim2.state();
+        s2.phase = Phase::Live;
+        s2.kickoff_remaining = 0;
+        s2.players[0].character = Character::Kite;
+        s2.players[0].ability_cooldown = 2;
+        sim2.set_state(s2);
+        events = StepEvents{};
+        in[0].buttons = ButtonAbility;
+        sim2.step(in, &events);
+        check(events.count == 0, "cooldown-blocked ability emits no event");
+    }
+}
+
+void test_strike_hit_event() {
+    Simulation sim;
+    GameState s = sim.state();
+    s.phase = Phase::Live;
+    s.kickoff_remaining = 0;
+    s.players[0].position = {kFieldWidth / 4, kFieldHalfY};
+    s.players[0].facing = {kFixedScale, 0};
+    s.players[0].strike_cooldown = 0;
+    s.players[0].strike_ticks = 0;
+    s.core.position = {s.players[0].position.x + kPlayerRadius + kCoreRadius,
+                       s.players[0].position.y};
+    s.core.velocity = {0, 0};
+    sim.set_state(s);
+
+    StepEvents events;
+    std::array<FrameInput, 2> in = {};
+    in[0].buttons = ButtonStrike;
+    sim.step(in, &events);
+
+    // Should have StrikeStarted and StrikeHit.
+    check(events.count == 2, "strike hit emits two events");
+    check(events.events[0].type == SimulationEventType::StrikeStarted,
+          "first event is StrikeStarted");
+    check(events.events[1].type == SimulationEventType::StrikeHit,
+          "second event is StrikeHit");
+    check(events.events[1].actor == 0, "StrikeHit has correct actor");
+}
+
+void test_core_bounce_events() {
+    // World wall bounce.
+    {
+        Simulation sim;
+        GameState s = sim.state();
+        s.phase = Phase::Live;
+        s.kickoff_remaining = 0;
+        s.core.position = {kFieldWidth - kCoreRadius - 50, 1000};
+        s.core.velocity = {200, 0};
+        sim.set_state(s);
+        StepEvents events;
+        sim.step({}, &events);
+        check(events.count == 1, "wall bounce emits one event");
+        check(events.events[0].type == SimulationEventType::CoreBounce,
+              "wall bounce emits CoreBounce");
+        check(events.events[0].actor == -1, "world bounce has actor -1");
+    }
+
+    // Player bounce.
+    {
+        Simulation sim;
+        GameState s = sim.state();
+        s.phase = Phase::Live;
+        s.kickoff_remaining = 0;
+        s.players[0].position = {kFieldWidth / 4, kFieldHalfY};
+        s.players[0].velocity = {0, 0};
+        s.core.position = {s.players[0].position.x + kPlayerRadius +
+                               kCoreRadius - 100,
+                           s.players[0].position.y};
+        s.core.velocity = {-200, 0};
+        sim.set_state(s);
+        StepEvents events;
+        sim.step({}, &events);
+        check(events.count == 1, "player bounce emits one event");
+        check(events.events[0].type == SimulationEventType::CoreBounce,
+              "player bounce emits CoreBounce");
+        check(events.events[0].actor == 0, "player bounce has correct actor");
+    }
+
+    // Gate bounce.
+    {
+        Simulation sim;
+        GameState s = sim.state();
+        s.phase = Phase::Live;
+        s.kickoff_remaining = 0;
+        s.players[0].character = Character::Bastion;
+        s.players[0].position = {1000, kFieldHalfY};
+        s.players[0].facing = {kFixedScale, 0};
+        s.players[0].effect_kind = EffectKind::PulseGate;
+        s.players[0].effect_ticks = 120;
+        s.players[0].effect_position = {kFieldWidth / 4 + 4 * kFixedScale,
+                                        kFieldHalfY};
+        s.core.position = {s.players[0].effect_position.x - kGateRadius -
+                               kCoreRadius - 50,
+                           kFieldHalfY};
+        s.core.velocity = {300, 0};
+        sim.set_state(s);
+        StepEvents events;
+        for (int i = 0; i < 12; ++i) {
+            events = StepEvents{};
+            sim.step({}, &events);
+            if (events.count > 0) break;
+        }
+        check(events.count > 0, "gate bounce emits event");
+        check(events.events[0].type == SimulationEventType::CoreBounce,
+              "gate bounce emits CoreBounce");
+        check(events.events[0].actor == 0, "gate bounce has correct actor");
+        check(events.events[0].effect_kind == EffectKind::PulseGate,
+              "gate bounce has correct effect kind");
+    }
+
+    // No bounce event on separating core.
+    {
+        Simulation sim;
+        GameState s = sim.state();
+        s.phase = Phase::Live;
+        s.kickoff_remaining = 0;
+        s.players[0].position = {kFieldWidth / 4, kFieldHalfY};
+        s.players[0].velocity = {0, 0};
+        s.core.position = {s.players[0].position.x + kPlayerRadius +
+                               kCoreRadius - 100,
+                           s.players[0].position.y};
+        s.core.velocity = {100, 0};  // Moving away, not entering
+        sim.set_state(s);
+        StepEvents events;
+        sim.step({}, &events);
+        check(events.count == 0, "separating core emits no bounce event");
+    }
+}
+
+void test_goal_event() {
+    Simulation sim;
+    GameState s = sim.state();
+    s.phase = Phase::Live;
+    s.kickoff_remaining = 0;
+    s.core.position = {kFieldWidth - 250, kFieldHalfY};
+    s.core.velocity = {300, 0};
+    sim.set_state(s);
+    StepEvents events;
+    StepResult r = sim.step({}, &events);
+    check(r.goal_scored, "goal is scored");
+    check(events.count == 1, "goal emits exactly one event");
+    check(events.events[0].type == SimulationEventType::GoalScored,
+          "goal emits GoalScored");
+    check(events.events[0].actor == 0, "goal event has correct scoring team");
+}
+
+void test_events_non_authoritative() {
+    // State and hash must be identical with and without events.
+    Simulation sim1({Character::Kite, Character::Bastion});
+    Simulation sim2({Character::Kite, Character::Bastion});
+
+    for (std::int32_t i = 0; i < 1000; ++i) {
+        std::array<FrameInput, 2> in = {scripted(static_cast<std::uint32_t>(i), 0),
+                                        scripted(static_cast<std::uint32_t>(i), 1)};
+        StepEvents events;
+        sim1.step(in, &events);
+        sim2.step(in, nullptr);
+        check(sim1.state() == sim2.state(),
+              "state is identical with and without events");
+        check(sim1.state_hash() == sim2.state_hash(),
+              "hash is identical with and without events");
+    }
+
+    // Optional StepEvents buffer still receives tick/decision boundary on Kickoff.
+    {
+        Simulation sim;
+        GameState s = sim.state();
+        s.phase = Phase::Kickoff;
+        s.kickoff_remaining = 5;
+        sim.set_state(s);
+        StepEvents events;
+        sim.step({}, &events);
+        check(events.tick == 1, "Kickoff step populates tick");
+        check(!events.decision_boundary, "Kickoff step populates decision_boundary");
+    }
+
+    // Optional StepEvents buffer still receives tick/decision boundary on MatchOver.
+    {
+        Simulation sim;
+        GameState s = sim.state();
+        s.phase = Phase::MatchOver;
+        sim.set_state(s);
+        StepEvents events;
+        sim.step({}, &events);
+        check(events.tick == 1, "MatchOver step populates tick");
+        check(!events.decision_boundary, "MatchOver step populates decision_boundary");
+    }
+}
+
 }  // namespace tests
 }  // namespace pulse
 
@@ -591,11 +910,19 @@ int main() {
     test_goal_scores();
     test_core_contact_and_substeps();
     test_wall_bounce();
+    test_wall_bounce_no_false_event();
     test_no_tunneling();
     test_strike_and_dash();
     test_abilities();
     test_action_space();
     test_replay();
+    test_court_geometry();
+    test_decision_boundary();
+    test_action_events();
+    test_strike_hit_event();
+    test_core_bounce_events();
+    test_goal_event();
+    test_events_non_authoritative();
     report();
     return 0;
 }

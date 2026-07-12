@@ -17,9 +17,9 @@ of `pulse_core`.
 
 ## Coordinate system
 
-- Court: 32 x 18 world units, fixed to `32768 x 18432`.
+- Court: 38 x 22 world units, fixed to `38912 x 22528`.
 - Origin is the bottom-left corner; `+y` is up.
-- Goal mouths are on the left and right walls between `y=6` and `y=12`.
+- Goal mouths are on the left and right walls between `y=8` and `y=14`.
 - Left team (index 0) defends the left goal and attacks right.
 - Right team (index 1) defends the right goal and attacks left.
 
@@ -45,10 +45,15 @@ of `pulse_core`.
 10. If a goal was scored, update score and either finish the match or enter a
    90-tick `Kickoff` reset.
 11. Update the regulation clock; tied expiry enters golden goal.
+12. If an optional `StepEvents` buffer is supplied, populate it with
+   non-authoritative telemetry (action starts, hits, bounces, goals) and the
+   decision boundary flag for the 10 Hz policy cadence.
 
 ## Determinism guarantees
 
 - Fixed 120 Hz tick rate with no wall-clock dependence.
+- Future AI policies refresh at 10 Hz (every 12 simulation ticks) via the
+  `decision_boundary` flag; this does not throttle human inputs or change physics.
 - The core's velocity is integrated exactly once per simulation tick, divided
   across two collision substeps; substeps cannot multiply travel distance.
 - No allocation inside `Simulation::step`.
@@ -57,7 +62,8 @@ of `pulse_core`.
 - Exact-overlap fallbacks are deterministic and documented in the source (push
   opposite core velocity, or separate players along the x-axis in index order).
 - `state_hash` is a stable FNV-1a over every authoritative field, including the
-  embedded `MatchConfig`.
+  embedded `MatchConfig`. The optional `StepEvents` buffer is non-authoritative
+  and excluded from hashing.
 
 ## State capacity
 
@@ -74,11 +80,34 @@ an intentional deferred feature, not a claimed capability.
 - Verification replays ticks through a fresh simulation and compares state
   hashes; the first mismatch is reported with tick, expected, and actual hash.
 
+## Event stream
+
+- `StepEvents` is an optional, caller-owned, fixed-capacity (16 events) diagnostic
+  output passed to `Simulation::step`.
+- It is non-authoritative: events are not part of `GameState`, replay bytes, or
+  state hashing, and cannot influence solver decisions.
+- Events are emitted in deterministic resolution order and include:
+  - `StrikeStarted` at successful swing activation
+  - `StrikeHit` when the one allowed hit launches the core
+  - `DashStarted` at successful dash activation
+  - `AbilityActivated` for Kite/Vale/Bastion abilities
+  - `CoreBounce` when a gate/player/world collision reflects an entering core
+    (actor=-1 for world walls, player index for players/gates)
+  - `GoalScored` exactly once for the scoring team before reset
+- Separating overlaps never emit a bounce event.
+- The buffer is cleared every step when supplied and receives the post-increment
+  tick plus `decision_boundary` even during `Kickoff` and `MatchOver`.
+- Event overflow drops deterministically and safely (no allocation, no crash).
+
 ## Boundaries
 
 - `pulse_core` (library) has no OS, window, or rendering dependencies.
 - `pulse_headless` is a command-line harness with a deterministic scripted
   input tape; it contains no AI.
 - `pulse_viewer` is a Win32/GDI visualizer that links only `pulse_core`,
-  `user32`, `gdi32`. It may render at any frame rate but advances the
-  simulation one fixed tick at a time.
+  `user32`, `gdi32`. It renders at 60 FPS using a fixed-step accumulator that
+  advances the authoritative 120 Hz simulation independently. The viewer
+  includes wall-clock time, floating-point animation state, and UI rendering,
+  but none of these enter the core simulation, replay system, or state hashing.
+  The viewer consumes StepEvents for visual feedback and action tracing but
+  never mutates core state or feeds back into simulation decisions.

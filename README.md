@@ -13,6 +13,16 @@ Characters: **Kite** uses Jetstep for a short speed burst and powered strike;
 **Vale** places an Anchor Well that bends the core; **Bastion** deploys a
 core-reflecting Pulse Gate.
 
+## Current ruleset (v2)
+
+- Court: 38 by 22 world units, with goal mouths centered on the two short sides
+  between y=8 and y=14.
+- Simulation: 120 Hz fixed tick rate with deterministic integer/fixed-point physics.
+- Decision cadence: 10 Hz (every 12 simulation ticks) for future AI policy refresh;
+  human/viewer input is not throttled.
+- Event stream: optional fixed-capacity (16 events) non-authoritative telemetry for
+  visualizers; does not affect state, replay, or hashing.
+
 ## Build
 
 Requires C++20, CMake, and Visual Studio 2026 (x64). CMake is configured to
@@ -63,26 +73,32 @@ build\release\Release\pulse_viewer.exe --left kite --right bastion
 
 Controls:
 
-| Left | Right |
-|------|-------|
-| Move: WASD | Move: Arrow keys |
-| Strike: F | Strike: Numpad 1 |
-| Ability: G | Ability: Numpad 2 |
-| Dash: H | Dash: Numpad 3 |
-| Reset: R | |
-| Quit: Esc | |
+| Left | Right | Global |
+|------|-------|--------|
+| Move: WASD | Move: IJKL (I=up, J=left, K=down, L=right) | Reset: R |
+| Strike: F | Strike: U | Pause: Space |
+| Ability: G | Ability: O | Quit: Esc |
+| Dash: H | Dash: P | |
 
 Aim defaults to the current movement direction; when movement is neutral the
 player keeps its last facing.
+
+The viewer uses a genuine 120 Hz fixed simulation accumulator with 60 FPS
+rendering, displays the 10 Hz policy clock, and pauses when the window loses
+focus or when manually paused. Strike, Ability, and Dash actions are edge-
+triggered (one press per action) rather than held. The viewer includes an
+action trace, policy inspector placeholder, and procedural animations for all
+core events.
 
 ## Verification labels
 
 - **Compiled only** — initial configure/build gate.
 - **Unit-tested** — `pulse_tests` covering fixed math, determinism, state
   restore, mirroring, goals, wall bounces, tunneling, strike/dash, abilities,
-  action space, and replay.
+  action space, replay, court geometry, decision boundaries, action events,
+  strike hits, core bounces, goal events, and event non-authoritativeness.
 - **Viewer smoke-tested** — `pulse_viewer.exe` builds and renders the court
-  and HUD in a live Win32 window. Reset/quit controls are implemented but
+  and sidebar in a live Win32 window. Reset/quit controls are implemented but
   still need a human keyboard pass; feel balancing remains separate.
 - **Deferred intentionally** — AI/training, additional team sizes, networking,
   gamepad support, audio, polish tuning, and comparison with any commercial

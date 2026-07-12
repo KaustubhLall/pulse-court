@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 
 namespace pulse {
@@ -11,14 +12,24 @@ namespace pulse {
 // or hashing.
 inline constexpr std::int32_t kFixedScale = 1024;
 inline constexpr std::int32_t kSimHz = 120;
+// Future policies refresh their chosen action at this cadence. The simulator
+// still advances every tick; human/viewer input is not throttled by it.
+inline constexpr std::int32_t kDecisionHz = 10;
+inline constexpr std::int32_t kDecisionIntervalTicks = kSimHz / kDecisionHz;
+static_assert(kSimHz % kDecisionHz == 0,
+              "decision cadence must divide the fixed simulation rate");
+
+[[nodiscard]] constexpr bool is_decision_tick(std::uint32_t tick) noexcept {
+    return tick != 0 && (tick % kDecisionIntervalTicks) == 0;
+}
 
 // Court dimensions in fixed units.
-inline constexpr std::int32_t kFieldWidth = 32 * kFixedScale;   // 32768
-inline constexpr std::int32_t kFieldHeight = 18 * kFixedScale;  // 18432
-inline constexpr std::int32_t kFieldHalfX = kFieldWidth / 2;    // 16384
-inline constexpr std::int32_t kFieldHalfY = kFieldHeight / 2;   // 9216
-inline constexpr std::int32_t kGoalTop = 6 * kFixedScale;       // 6144
-inline constexpr std::int32_t kGoalBottom = 12 * kFixedScale;   // 12288
+inline constexpr std::int32_t kFieldWidth = 38 * kFixedScale;
+inline constexpr std::int32_t kFieldHeight = 22 * kFixedScale;
+inline constexpr std::int32_t kFieldHalfX = kFieldWidth / 2;
+inline constexpr std::int32_t kFieldHalfY = kFieldHeight / 2;
+inline constexpr std::int32_t kGoalTop = 8 * kFixedScale;
+inline constexpr std::int32_t kGoalBottom = 14 * kFixedScale;
 
 // Entity radii (fixed units).
 inline constexpr std::int32_t kPlayerRadius = 737;  // ~0.72 world units
@@ -28,19 +39,19 @@ inline constexpr std::int32_t kCoreRadius = 358;    // ~0.35 world units
 inline constexpr std::int32_t kCoreSubsteps = 2;
 
 // Movement and physics constants (fixed units per tick where applicable).
-// These are deliberately modest for a 32-unit court: the core can outpace a
-// player, but cannot traverse the field in a few simulation frames.
-inline constexpr std::int32_t kPlayerMaxSpeed = 80;     // ~9.4 world units/sec
+// The core remains faster than a player on the larger court so clean strikes
+// ask for anticipation rather than a late reaction.
+inline constexpr std::int32_t kPlayerMaxSpeed = 92;     // ~10.8 world units/sec
 inline constexpr std::int32_t kPlayerAccel = 4;         // fixed units/tick^2
 inline constexpr std::int32_t kPlayerFriction = 4;      // fixed units/tick^2
-inline constexpr std::int32_t kCoreMaxSpeed = 300;      // ~35.2 world units/sec
-inline constexpr std::int32_t kCoreDrag = 2;            // fixed units/tick^2
+inline constexpr std::int32_t kCoreMaxSpeed = 380;      // ~44.5 world units/sec
+inline constexpr std::int32_t kCoreDrag = 1;            // fixed units/tick^2
 inline constexpr std::int32_t kCoreRestitution = 896;   // 87.5%, scaled by 1024
-inline constexpr std::int32_t kDashSpeed = 150;         // ~17.6 world units/sec
+inline constexpr std::int32_t kDashSpeed = 170;         // ~19.9 world units/sec
 
 inline constexpr std::int32_t kStrikeReach = 768;       // 0.75 world unit reach
-inline constexpr std::int32_t kStrikeImpulse = 170;     // fixed units/tick
-inline constexpr std::int32_t kStrikeMinForwardSpeed = 120;
+inline constexpr std::int32_t kStrikeImpulse = 210;     // fixed units/tick
+inline constexpr std::int32_t kStrikeMinForwardSpeed = 155;
 inline constexpr std::int32_t kStrikeForwardCos = 256;  // cos(theta) * 1024
 inline constexpr std::int32_t kStrikeSeparation = 48;
 inline constexpr std::int32_t kStrikeDuration = 6;      // ticks
@@ -49,7 +60,7 @@ inline constexpr std::int32_t kDashCooldown = 144;      // ticks
 
 // Character-specific tuning.
 inline constexpr std::int32_t kKiteStrikeBonus = 90;            // fixed/tick
-inline constexpr std::int32_t kJetstepSpeedBonus = 60;          // fixed/tick
+inline constexpr std::int32_t kJetstepSpeedBonus = 68;          // fixed/tick
 inline constexpr std::int32_t kJetstepDuration = 45;            // ticks
 inline constexpr std::int32_t kAbilityCooldown = 300;           // ticks
 inline constexpr std::int32_t kAnchorOffset = 4 * kFixedScale;  // 4.0 units
@@ -60,7 +71,7 @@ inline constexpr std::int32_t kGateOffset = 4 * kFixedScale;    // 4.0 units
 inline constexpr std::int32_t kGateRadius = (5 * kFixedScale) / 2;  // 2.5 units
 inline constexpr std::int32_t kGateDuration = 120;              // ticks
 
-inline constexpr std::uint32_t kRulesetVersion = 1;
+inline constexpr std::uint32_t kRulesetVersion = 2;
 
 struct Vec2 {
     std::int32_t x = 0;
@@ -88,6 +99,19 @@ enum class EffectKind : std::uint8_t {
     PulseGate = 3,
 };
 
+// A non-authoritative visual/inspection event. Values are intentionally
+// stable: a viewer or later policy inspector may switch on them, but they are
+// not part of GameState, replay bytes, or state hashing.
+enum class SimulationEventType : std::uint8_t {
+    None = 0,
+    StrikeStarted = 1,
+    StrikeHit = 2,
+    DashStarted = 3,
+    AbilityActivated = 4,
+    CoreBounce = 5,
+    GoalScored = 6,
+};
+
 enum InputButton : std::uint8_t {
     ButtonNone = 0,
     ButtonStrike = 1 << 0,
@@ -103,6 +127,33 @@ struct FrameInput {
     std::uint8_t buttons = ButtonNone;
 
     [[nodiscard]] constexpr bool operator==(const FrameInput&) const = default;
+};
+
+struct SimulationEvent {
+    SimulationEventType type = SimulationEventType::None;
+    // Player index, or -1 for a world surface.
+    std::int8_t actor = -1;
+    EffectKind effect_kind = EffectKind::None;
+    Vec2 position{};
+    // Facing for an action, or post-contact core velocity for a bounce.
+    Vec2 direction{};
+
+    [[nodiscard]] constexpr bool operator==(const SimulationEvent&) const =
+        default;
+};
+
+inline constexpr std::size_t kMaxStepEvents = 16;
+
+// Caller-owned, fixed-capacity diagnostic output. Supplying it is optional;
+// default headless stepping stays allocation-free and does not serialize it.
+struct StepEvents {
+    std::uint32_t tick = 0;
+    bool decision_boundary = false;
+    std::uint8_t count = 0;
+    std::array<SimulationEvent, kMaxStepEvents> events{};
+
+    [[nodiscard]] constexpr bool operator==(const StepEvents&) const =
+        default;
 };
 
 struct CoreState {
@@ -173,7 +224,8 @@ public:
 
     [[nodiscard]] const GameState& state() const noexcept;
     [[nodiscard]] const MatchConfig& config() const noexcept;
-    [[nodiscard]] StepResult step(const std::array<FrameInput, 2>& inputs);
+    [[nodiscard]] StepResult step(const std::array<FrameInput, 2>& inputs,
+                                  StepEvents* events = nullptr);
     [[nodiscard]] std::uint64_t state_hash() const noexcept;
 
     [[nodiscard]] static FrameInput decode_action(std::int32_t action_index) noexcept;
@@ -188,14 +240,16 @@ private:
 
     void reset_positions();
     void decrement_timers();
-    void apply_player_input(std::int32_t player_index, FrameInput input);
+    void apply_player_input(std::int32_t player_index, FrameInput input,
+                            StepEvents* events);
     void resolve_player_motion();
-    void resolve_strikes();
+    void resolve_strikes(StepEvents* events);
     void apply_effect_forces();
     void apply_core_drag();
-    void advance_core(StepResult& result);
+    void advance_core(StepResult& result, StepEvents* events);
     bool check_goal_line(StepResult& result);
-    void score_goal(std::int32_t team, StepResult& result);
+    void score_goal(std::int32_t team, StepResult& result,
+                    StepEvents* events);
     void update_clock(StepResult& result);
 };
 

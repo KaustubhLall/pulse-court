@@ -1,9 +1,9 @@
-# Pulse Court 1v1 Ruleset
+# Pulse Court 1v1 Ruleset (v2)
 
 ## Match
 
-- Court: 32 by 18 world units, with goal mouths centered on the two short sides
-  between y=6 and y=12.
+- Court: 38 by 22 world units, with goal mouths centered on the two short sides
+  between y=8 and y=14.
 - Teams: one player per side. Left (index 0) attacks right; right (index 1)
   attacks left.
 - Win condition: first to five goals. A 180-second regulation clock ends the

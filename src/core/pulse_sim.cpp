@@ -18,10 +18,18 @@ Vec2 normalize_velocity(Vec2 v) noexcept {
     return {static_cast<std::int32_t>(nx), static_cast<std::int32_t>(ny)};
 }
 
+void append_event(StepEvents* events, SimulationEventType type,
+                  std::int8_t actor, EffectKind effect_kind, Vec2 position,
+                  Vec2 direction) noexcept {
+    if (events == nullptr || events->count >= events->events.size()) return;
+    events->events[events->count++] =
+        {type, actor, effect_kind, position, direction};
+}
+
 // Push the core out of a circle and only bounce it while it is entering that
 // surface. Reflecting an already-separating core creates contact jitter and
 // can cancel a clean strike on the next solver pass.
-void resolve_core_vs_circle(CoreState& core, Vec2 center,
+bool resolve_core_vs_circle(CoreState& core, Vec2 center,
                             std::int32_t radius,
                             Vec2 surface_velocity = {}) noexcept {
     std::int64_t dx = core.position.x - center.x;
@@ -29,7 +37,7 @@ void resolve_core_vs_circle(CoreState& core, Vec2 center,
     std::int64_t min_dist = kCoreRadius + radius;
     std::int64_t dist2 = dx * dx + dy * dy;
     std::int64_t min_dist2 = min_dist * min_dist;
-    if (dist2 >= min_dist2) return;
+    if (dist2 >= min_dist2) return false;
 
     Vec2 relative_velocity{core.velocity.x - surface_velocity.x,
                            core.velocity.y - surface_velocity.y};
@@ -50,7 +58,7 @@ void resolve_core_vs_circle(CoreState& core, Vec2 center,
     } else {
         std::uint64_t dist = isqrt64(static_cast<std::uint64_t>(dist2));
         std::int64_t overlap = min_dist - static_cast<std::int64_t>(dist);
-        if (overlap <= 0) return;
+        if (overlap <= 0) return false;
         normal = {static_cast<std::int32_t>(dx * kFixedScale /
                                              static_cast<std::int64_t>(dist)),
                   static_cast<std::int32_t>(dy * kFixedScale /
@@ -75,7 +83,9 @@ void resolve_core_vs_circle(CoreState& core, Vec2 center,
             kFixedScale);
         core.velocity = {surface_velocity.x + bounced.x,
                          surface_velocity.y + bounced.y};
+        return true;
     }
+    return false;
 }
 
 // Constrain a player inside the court with its radius.
@@ -176,9 +186,15 @@ void Simulation::decrement_timers() {
     }
 }
 
-StepResult Simulation::step(const std::array<FrameInput, 2>& inputs) {
+StepResult Simulation::step(const std::array<FrameInput, 2>& inputs,
+                            StepEvents* events) {
     StepResult result{};
+    if (events != nullptr) *events = StepEvents{};
     ++state_.tick;
+    if (events != nullptr) {
+        events->tick = state_.tick;
+        events->decision_boundary = is_decision_tick(state_.tick);
+    }
     decrement_timers();
 
     if (state_.phase == Phase::MatchOver) return result;
@@ -196,17 +212,17 @@ StepResult Simulation::step(const std::array<FrameInput, 2>& inputs) {
     }
 
     for (std::size_t i = 0; i < state_.players.size(); ++i) {
-        apply_player_input(static_cast<std::int32_t>(i), inputs[i]);
+        apply_player_input(static_cast<std::int32_t>(i), inputs[i], events);
     }
 
     resolve_player_motion();
-    resolve_strikes();
+    resolve_strikes(events);
     apply_effect_forces();
 
-    advance_core(result);
+    advance_core(result, events);
 
     if (result.goal_scored) {
-        score_goal(result.scoring_team, result);
+        score_goal(result.scoring_team, result, events);
     } else {
         apply_core_drag();
     }
@@ -216,7 +232,7 @@ StepResult Simulation::step(const std::array<FrameInput, 2>& inputs) {
 }
 
 void Simulation::apply_player_input(std::int32_t player_index,
-                                    FrameInput input) {
+                                    FrameInput input, StepEvents* events) {
     PlayerState& p = state_.players[player_index];
     p.facing = choose_facing(input, p.facing);
 
@@ -225,11 +241,17 @@ void Simulation::apply_player_input(std::int32_t player_index,
         p.strike_ticks = kStrikeDuration;
         p.strike_cooldown = kStrikeCooldown;
         p.strike_has_hit = false;
+        append_event(events, SimulationEventType::StrikeStarted,
+                     static_cast<std::int8_t>(player_index), EffectKind::None,
+                     p.position, p.facing);
     }
 
     if ((input.buttons & ButtonDash) && p.dash_cooldown == 0) {
         dash_fired_[player_index] = true;
         p.dash_cooldown = kDashCooldown;
+        append_event(events, SimulationEventType::DashStarted,
+                     static_cast<std::int8_t>(player_index), EffectKind::None,
+                     p.position, p.facing);
     }
 
     if ((input.buttons & ButtonAbility) && p.ability_cooldown == 0) {
@@ -254,6 +276,9 @@ void Simulation::apply_player_input(std::int32_t player_index,
                     push(p.position, p.facing, kGateOffset, kFixedScale);
                 break;
         }
+        append_event(events, SimulationEventType::AbilityActivated,
+                     static_cast<std::int8_t>(player_index), p.effect_kind,
+                     p.effect_position, p.facing);
     }
 }
 
@@ -356,7 +381,7 @@ void Simulation::resolve_player_motion() {
     }
 }
 
-void Simulation::resolve_strikes() {
+void Simulation::resolve_strikes(StepEvents* events) {
     for (std::size_t i = 0; i < state_.players.size(); ++i) {
         PlayerState& p = state_.players[i];
         if (p.strike_ticks == 0 || p.strike_has_hit) continue;
@@ -407,6 +432,9 @@ void Simulation::resolve_strikes() {
                 cap_length(state_.core.velocity, kCoreMaxSpeed);
             p.strike_has_hit = true;
             state_.last_touch = static_cast<std::int8_t>(i);
+            append_event(events, SimulationEventType::StrikeHit,
+                         static_cast<std::int8_t>(i), EffectKind::None,
+                         state_.core.position, p.facing);
         }
     }
 }
@@ -451,7 +479,7 @@ void Simulation::apply_core_drag() {
     core.velocity = cap_length(core.velocity, kCoreMaxSpeed);
 }
 
-void Simulation::advance_core(StepResult& result) {
+void Simulation::advance_core(StepResult& result, StepEvents* events) {
     if (state_.phase != Phase::Live) return;
 
     CoreState& core = state_.core;
@@ -473,16 +501,26 @@ void Simulation::advance_core(StepResult& result) {
         core.position.y += dy;
 
         // Gate collisions are resolved before player and wall contacts.
-        for (const auto& p : state_.players) {
+        for (std::size_t i = 0; i < state_.players.size(); ++i) {
+            const auto& p = state_.players[i];
             if (p.effect_kind == EffectKind::PulseGate && p.effect_ticks > 0) {
-                resolve_core_vs_circle(core, p.effect_position, kGateRadius);
+                if (resolve_core_vs_circle(core, p.effect_position, kGateRadius)) {
+                    append_event(events, SimulationEventType::CoreBounce,
+                                 static_cast<std::int8_t>(i), EffectKind::PulseGate,
+                                 core.position, core.velocity);
+                }
             }
         }
 
         // Player collisions are resolved in fixed player order.
-        for (const auto& p : state_.players) {
-            resolve_core_vs_circle(core, p.position, kPlayerRadius,
-                                   p.velocity);
+        for (std::size_t i = 0; i < state_.players.size(); ++i) {
+            const auto& p = state_.players[i];
+            if (resolve_core_vs_circle(core, p.position, kPlayerRadius,
+                                       p.velocity)) {
+                append_event(events, SimulationEventType::CoreBounce,
+                             static_cast<std::int8_t>(i), EffectKind::None,
+                             core.position, core.velocity);
+            }
         }
         core.velocity = cap_length(core.velocity, kCoreMaxSpeed);
 
@@ -507,36 +545,56 @@ void Simulation::advance_core(StepResult& result) {
         if (!in_goal_y) {
             if (core.position.x < kCoreRadius) {
                 core.position.x = 2 * kCoreRadius - core.position.x;
-                core.velocity.x = static_cast<std::int32_t>(
-                    -static_cast<std::int64_t>(core.velocity.x) *
-                    kCoreRestitution / kFixedScale);
+                if (core.velocity.x < 0) {
+                    core.velocity.x = static_cast<std::int32_t>(
+                        -static_cast<std::int64_t>(core.velocity.x) *
+                        kCoreRestitution / kFixedScale);
+                    append_event(events, SimulationEventType::CoreBounce,
+                                 -1, EffectKind::None, core.position, core.velocity);
+                }
             } else if (core.position.x > kFieldWidth - kCoreRadius) {
                 core.position.x =
                     2 * (kFieldWidth - kCoreRadius) - core.position.x;
-                core.velocity.x = static_cast<std::int32_t>(
-                    -static_cast<std::int64_t>(core.velocity.x) *
-                    kCoreRestitution / kFixedScale);
+                if (core.velocity.x > 0) {
+                    core.velocity.x = static_cast<std::int32_t>(
+                        -static_cast<std::int64_t>(core.velocity.x) *
+                        kCoreRestitution / kFixedScale);
+                    append_event(events, SimulationEventType::CoreBounce,
+                                 -1, EffectKind::None, core.position, core.velocity);
+                }
             }
         }
 
         if (core.position.y < kCoreRadius) {
             core.position.y = 2 * kCoreRadius - core.position.y;
-            core.velocity.y = static_cast<std::int32_t>(
-                -static_cast<std::int64_t>(core.velocity.y) *
-                kCoreRestitution / kFixedScale);
+            if (core.velocity.y < 0) {
+                core.velocity.y = static_cast<std::int32_t>(
+                    -static_cast<std::int64_t>(core.velocity.y) *
+                    kCoreRestitution / kFixedScale);
+                append_event(events, SimulationEventType::CoreBounce,
+                             -1, EffectKind::None, core.position, core.velocity);
+            }
         } else if (core.position.y > kFieldHeight - kCoreRadius) {
             core.position.y =
                 2 * (kFieldHeight - kCoreRadius) - core.position.y;
-            core.velocity.y = static_cast<std::int32_t>(
-                -static_cast<std::int64_t>(core.velocity.y) *
-                kCoreRestitution / kFixedScale);
+            if (core.velocity.y > 0) {
+                core.velocity.y = static_cast<std::int32_t>(
+                    -static_cast<std::int64_t>(core.velocity.y) *
+                    kCoreRestitution / kFixedScale);
+                append_event(events, SimulationEventType::CoreBounce,
+                             -1, EffectKind::None, core.position, core.velocity);
+            }
         }
     }
 }
 
-void Simulation::score_goal(std::int32_t team, StepResult& result) {
+void Simulation::score_goal(std::int32_t team, StepResult& result,
+                            StepEvents* events) {
     if (team < 0 || team > 1) return;
     state_.score[team] += 1;
+    append_event(events, SimulationEventType::GoalScored,
+                 static_cast<std::int8_t>(team), EffectKind::None,
+                 state_.core.position, state_.core.velocity);
     bool winning = (state_.score[team] >= config_.score_to_win) ||
                    state_.golden_goal;
     if (winning) {
