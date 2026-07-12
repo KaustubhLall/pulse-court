@@ -90,6 +90,15 @@ triggered (one press per action) rather than held. The viewer includes an
 action trace, policy inspector placeholder, and procedural animations for all
 core events.
 
+## Art assets
+
+`assets/sprites/` contains an original transparent player/action sprite pack
+for Kite, Vale, and Bastion, plus a core and ability-effects sheet. The
+grid-based [sprite manifest](assets/sprites/manifest.json) makes the sheets
+ready for a bitmap renderer without binding visual assets into the deterministic
+simulation. The current Win32 viewer continues to use its procedural renderer;
+sprite-sheet rendering is a presentation-only follow-up.
+
 ## Verification labels
 
 - **Compiled only** — initial configure/build gate.

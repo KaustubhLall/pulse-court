@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "coordinateSystem": "normalized-grid",
+  "sheets": {
+    "kite_actions": {
+      "file": "kite_actions.png",
+      "columns": 2,
+      "rows": 2,
+      "frames": {
+        "idle": [0, 0],
+        "move": [1, 0],
+        "strike": [0, 1],
+        "ability": [1, 1]
+      }
+    },
+    "vale_actions": {
+      "file": "vale_actions.png",
+      "columns": 2,
+      "rows": 2,
+      "frames": {
+        "idle": [0, 0],
+        "move": [1, 0],
+        "strike": [0, 1],
+        "ability": [1, 1]
+      }
+    },
+    "bastion_actions": {
+      "file": "bastion_actions.png",
+      "columns": 2,
+      "rows": 2,
+      "frames": {
+        "idle": [0, 0],
+        "move": [1, 0],
+        "strike": [0, 1],
+        "ability": [1, 1]
+      }
+    },
+    "arena_fx": {
+      "file": "arena_fx.png",
+      "columns": 2,
+      "rows": 3,
+      "frames": {
+        "core": [0, 0],
+        "strikeBurst": [1, 0],
+        "dashStreak": [0, 1],
+        "jetstepRing": [1, 1],
+        "anchorWell": [0, 2],
+        "pulseGate": [1, 2]
+      }
+    }
+  }
+}
