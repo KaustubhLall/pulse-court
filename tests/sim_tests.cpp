@@ -172,7 +172,7 @@ void test_goal_scores() {
     GameState s = sim.state();
     s.phase = Phase::Live;
     s.kickoff_remaining = 0;
-    s.core.position = {kFieldWidth - kCoreRadius - 100, kFieldHalfY};
+    s.core.position = {kFieldWidth - 250, kFieldHalfY};
     s.core.velocity = {300, 0};
     sim.set_state(s);
     StepResult r = sim.step({});
@@ -182,6 +182,43 @@ void test_goal_scores() {
     check(sim.state().phase == Phase::Kickoff, "non-winning goal -> kickoff");
     check(sim.state().kickoff_remaining == sim.config().kickoff_ticks,
           "kickoff timer set");
+}
+
+void test_core_contact_and_substeps() {
+    // The core uses two internal substeps, but its velocity is integrated once
+    // per simulation tick. This guards against accidentally nesting the
+    // substep loop at the caller and doubling core travel.
+    {
+        Simulation sim;
+        GameState s = sim.state();
+        s.phase = Phase::Live;
+        s.kickoff_remaining = 0;
+        s.core.position = {kFieldHalfX, kFieldHalfY};
+        s.core.velocity = {200, 0};
+        sim.set_state(s);
+        (void)sim.step({});
+        check(sim.state().core.position.x == kFieldHalfX + 200,
+              "core integrates velocity once per tick across substeps");
+    }
+
+    // A separating core must be depenetrated without being reflected back into
+    // the player on the next contact pass.
+    {
+        Simulation sim;
+        GameState s = sim.state();
+        s.phase = Phase::Live;
+        s.kickoff_remaining = 0;
+        s.players[0].position = {kFieldWidth / 4, kFieldHalfY};
+        s.players[0].velocity = {0, 0};
+        s.core.position = {s.players[0].position.x + kPlayerRadius +
+                               kCoreRadius - 100,
+                           s.players[0].position.y};
+        s.core.velocity = {100, 0};
+        sim.set_state(s);
+        (void)sim.step({});
+        check(sim.state().core.velocity.x > 0,
+              "separating core is not reflected back into player");
+    }
 }
 
 void test_wall_bounce() {
@@ -278,6 +315,8 @@ void test_strike_and_dash() {
             isqrt64(static_cast<std::uint64_t>(
                 length_sq(sim.state().players[0].velocity)));
         check(speed1 > 0, "dash produces velocity");
+        check(speed1 >= static_cast<std::uint64_t>(kDashSpeed - 1),
+              "dash is not capped back to normal movement speed");
 
         // Hold dash while on cooldown; cooldown should tick down, not reset.
         sim.step(in);
@@ -292,7 +331,7 @@ void test_strike_and_dash() {
         s.phase = Phase::Live;
         s.kickoff_remaining = 0;
         s.score = {4, 0};
-        s.core.position = {kFieldWidth - kCoreRadius - 100, kFieldHalfY};
+        s.core.position = {kFieldWidth - 250, kFieldHalfY};
         s.core.velocity = {300, 0};
         sim.set_state(s);
         StepResult r = sim.step({});
@@ -378,9 +417,32 @@ void test_abilities() {
                            kFieldHalfY};
         s.core.velocity = {300, 0};
         sim.set_state(s);
-        for (int i = 0; i < 4; ++i) sim.step({});
+        for (int i = 0; i < 12; ++i) (void)sim.step({});
         check(sim.state().core.velocity.x < 0,
               "Bastion gate reflects core");
+    }
+
+    // A strike is directional: a nearby core behind the striker should not
+    // be launched through the player.
+    {
+        Simulation sim;
+        GameState s = sim.state();
+        s.phase = Phase::Live;
+        s.kickoff_remaining = 0;
+        s.players[0].position = {kFieldWidth / 4, kFieldHalfY};
+        s.players[0].facing = {kFixedScale, 0};
+        s.players[0].strike_cooldown = 0;
+        s.core.position = {s.players[0].position.x - kPlayerRadius -
+                               kCoreRadius,
+                           s.players[0].position.y};
+        s.core.velocity = {0, 0};
+        sim.set_state(s);
+        std::array<FrameInput, 2> in = {};
+        in[0].buttons = ButtonStrike;
+        (void)sim.step(in);
+        check(!sim.state().players[0].strike_has_hit &&
+                  sim.state().core.velocity.x == 0,
+              "strike ignores a core behind the striker");
     }
 
     // Vale anchor pull.
@@ -527,6 +589,7 @@ int main() {
     test_state_restore();
     test_mirror_identity();
     test_goal_scores();
+    test_core_contact_and_substeps();
     test_wall_bounce();
     test_no_tunneling();
     test_strike_and_dash();

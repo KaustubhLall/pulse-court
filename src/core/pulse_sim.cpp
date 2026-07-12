@@ -18,9 +18,12 @@ Vec2 normalize_velocity(Vec2 v) noexcept {
     return {static_cast<std::int32_t>(nx), static_cast<std::int32_t>(ny)};
 }
 
-// Push a circle (core) out of an immovable circle and reflect its velocity.
+// Push the core out of a circle and only bounce it while it is entering that
+// surface. Reflecting an already-separating core creates contact jitter and
+// can cancel a clean strike on the next solver pass.
 void resolve_core_vs_circle(CoreState& core, Vec2 center,
-                            std::int32_t radius) noexcept {
+                            std::int32_t radius,
+                            Vec2 surface_velocity = {}) noexcept {
     std::int64_t dx = core.position.x - center.x;
     std::int64_t dy = core.position.y - center.y;
     std::int64_t min_dist = kCoreRadius + radius;
@@ -28,33 +31,51 @@ void resolve_core_vs_circle(CoreState& core, Vec2 center,
     std::int64_t min_dist2 = min_dist * min_dist;
     if (dist2 >= min_dist2) return;
 
+    Vec2 relative_velocity{core.velocity.x - surface_velocity.x,
+                           core.velocity.y - surface_velocity.y};
+    Vec2 normal{};
     if (dist2 == 0) {
         // Exact overlap fallback: push opposite the core's velocity, or +x if
         // the core is stationary. This is deterministic because velocity is
         // part of the authoritative state.
-        Vec2 n = {kFixedScale, 0};
-        if (core.velocity.x != 0 || core.velocity.y != 0) {
-            n = normalize_velocity({-core.velocity.x, -core.velocity.y});
+        normal = {kFixedScale, 0};
+        if (relative_velocity.x != 0 || relative_velocity.y != 0) {
+            normal =
+                normalize_velocity({-relative_velocity.x, -relative_velocity.y});
         }
-        core.position.x += static_cast<std::int32_t>(n.x * min_dist /
+        core.position.x += static_cast<std::int32_t>(normal.x * min_dist /
                                                      kFixedScale);
-        core.position.y += static_cast<std::int32_t>(n.y * min_dist /
+        core.position.y += static_cast<std::int32_t>(normal.y * min_dist /
                                                      kFixedScale);
-        core.velocity = reflect(core.velocity, n);
-        return;
+    } else {
+        std::uint64_t dist = isqrt64(static_cast<std::uint64_t>(dist2));
+        std::int64_t overlap = min_dist - static_cast<std::int64_t>(dist);
+        if (overlap <= 0) return;
+        normal = {static_cast<std::int32_t>(dx * kFixedScale /
+                                             static_cast<std::int64_t>(dist)),
+                  static_cast<std::int32_t>(dy * kFixedScale /
+                                             static_cast<std::int64_t>(dist))};
+        core.position.x +=
+            static_cast<std::int32_t>(normal.x * overlap / kFixedScale);
+        core.position.y +=
+            static_cast<std::int32_t>(normal.y * overlap / kFixedScale);
     }
 
-    std::uint64_t dist = isqrt64(static_cast<std::uint64_t>(dist2));
-    std::int64_t overlap = min_dist - static_cast<std::int64_t>(dist);
-    if (overlap <= 0) return;
-
-    Vec2 n{static_cast<std::int32_t>(dx * kFixedScale /
-                                      static_cast<std::int64_t>(dist)),
-           static_cast<std::int32_t>(dy * kFixedScale /
-                                      static_cast<std::int64_t>(dist))};
-    core.position.x += static_cast<std::int32_t>(n.x * overlap / kFixedScale);
-    core.position.y += static_cast<std::int32_t>(n.y * overlap / kFixedScale);
-    core.velocity = reflect(core.velocity, n);
+    const std::int64_t normal_speed =
+        (static_cast<std::int64_t>(relative_velocity.x) * normal.x +
+         static_cast<std::int64_t>(relative_velocity.y) * normal.y) /
+        kFixedScale;
+    if (normal_speed < 0) {
+        Vec2 bounced = reflect(relative_velocity, normal);
+        bounced.x = static_cast<std::int32_t>(
+            static_cast<std::int64_t>(bounced.x) * kCoreRestitution /
+            kFixedScale);
+        bounced.y = static_cast<std::int32_t>(
+            static_cast<std::int64_t>(bounced.y) * kCoreRestitution /
+            kFixedScale);
+        core.velocity = {surface_velocity.x + bounced.x,
+                         surface_velocity.y + bounced.y};
+    }
 }
 
 // Constrain a player inside the court with its radius.
@@ -182,13 +203,12 @@ StepResult Simulation::step(const std::array<FrameInput, 2>& inputs) {
     resolve_strikes();
     apply_effect_forces();
 
-    for (std::int32_t s = 0; s < kCoreSubsteps; ++s) {
-        advance_core(result);
-        if (result.goal_scored) break;
-    }
+    advance_core(result);
 
     if (result.goal_scored) {
         score_goal(result.scoring_team, result);
+    } else {
+        apply_core_drag();
     }
 
     update_clock(result);
@@ -271,6 +291,9 @@ void Simulation::resolve_player_motion() {
         if (p.effect_kind == EffectKind::Jetstep) {
             max_speed += kJetstepSpeedBonus;
         }
+        if (dash_fired_[i] && max_speed < kDashSpeed) {
+            max_speed = kDashSpeed;
+        }
         p.velocity = cap_length(p.velocity, max_speed);
 
         p.position.x += p.velocity.x;
@@ -288,37 +311,47 @@ void Simulation::resolve_player_motion() {
     std::int64_t dist2 = dx * dx + dy * dy;
     std::int64_t min_dist2 = min_dist * min_dist;
     if (dist2 < min_dist2) {
-        if (dist2 == 0) {
-            // Exact overlap fallback: separate horizontally, reflect x
-            // velocity. This is deterministic because players are processed in
-            // fixed index order.
-            a.position.x -= static_cast<std::int32_t>(min_dist / 2);
-            b.position.x += static_cast<std::int32_t>(min_dist / 2);
-            clamp_player(a);
-            clamp_player(b);
-            a.velocity.x = -a.velocity.x;
-            b.velocity.x = -b.velocity.x;
-        } else {
+        Vec2 normal{kFixedScale, 0};
+        std::int64_t overlap = min_dist;
+        if (dist2 != 0) {
             std::uint64_t dist =
                 isqrt64(static_cast<std::uint64_t>(dist2));
-            std::int64_t overlap = min_dist - static_cast<std::int64_t>(dist);
-            Vec2 n{static_cast<std::int32_t>(dx * kFixedScale /
-                                              static_cast<std::int64_t>(dist)),
-                   static_cast<std::int32_t>(dy * kFixedScale /
-                                              static_cast<std::int64_t>(dist))};
-            std::int64_t shift = overlap / 2;
-            a.position.x -=
-                static_cast<std::int32_t>(n.x * shift / kFixedScale);
-            a.position.y -=
-                static_cast<std::int32_t>(n.y * shift / kFixedScale);
-            b.position.x +=
-                static_cast<std::int32_t>(n.x * shift / kFixedScale);
-            b.position.y +=
-                static_cast<std::int32_t>(n.y * shift / kFixedScale);
-            clamp_player(a);
-            clamp_player(b);
-            a.velocity = reflect(a.velocity, n);
-            b.velocity = reflect(b.velocity, {-n.x, -n.y});
+            overlap = min_dist - static_cast<std::int64_t>(dist);
+            normal = {static_cast<std::int32_t>(dx * kFixedScale /
+                                                 static_cast<std::int64_t>(dist)),
+                      static_cast<std::int32_t>(dy * kFixedScale /
+                                                 static_cast<std::int64_t>(dist))};
+        }
+
+        const std::int64_t shift = overlap / 2;
+        a.position.x -=
+            static_cast<std::int32_t>(normal.x * shift / kFixedScale);
+        a.position.y -=
+            static_cast<std::int32_t>(normal.y * shift / kFixedScale);
+        b.position.x +=
+            static_cast<std::int32_t>(normal.x * shift / kFixedScale);
+        b.position.y +=
+            static_cast<std::int32_t>(normal.y * shift / kFixedScale);
+        clamp_player(a);
+        clamp_player(b);
+
+        const std::int64_t relative_normal =
+            ((static_cast<std::int64_t>(b.velocity.x) - a.velocity.x) *
+                 normal.x +
+             (static_cast<std::int64_t>(b.velocity.y) - a.velocity.y) *
+                 normal.y) /
+            kFixedScale;
+        if (relative_normal < 0) {
+            const std::int32_t impulse =
+                static_cast<std::int32_t>((-relative_normal) / 2);
+            a.velocity.x -= static_cast<std::int32_t>(
+                static_cast<std::int64_t>(normal.x) * impulse / kFixedScale);
+            a.velocity.y -= static_cast<std::int32_t>(
+                static_cast<std::int64_t>(normal.y) * impulse / kFixedScale);
+            b.velocity.x += static_cast<std::int32_t>(
+                static_cast<std::int64_t>(normal.x) * impulse / kFixedScale);
+            b.velocity.y += static_cast<std::int32_t>(
+                static_cast<std::int64_t>(normal.y) * impulse / kFixedScale);
         }
     }
 }
@@ -332,7 +365,14 @@ void Simulation::resolve_strikes() {
         std::int64_t dy = state_.core.position.y - p.position.y;
         std::int64_t hit_radius = kPlayerRadius + kCoreRadius + kStrikeReach;
         std::int64_t hit_r2 = hit_radius * hit_radius;
-        if (dx * dx + dy * dy <= hit_r2) {
+        const std::uint64_t distance =
+            isqrt64(static_cast<std::uint64_t>(dx * dx + dy * dy));
+        const std::int64_t forward_dot =
+            dx * p.facing.x + dy * p.facing.y;
+        if (dx * dx + dy * dy <= hit_r2 &&
+            (distance == 0 ||
+             forward_dot >= static_cast<std::int64_t>(distance) *
+                                kStrikeForwardCos)) {
             std::int32_t impulse = kStrikeImpulse;
             if (p.character == Character::Kite &&
                 p.effect_kind == EffectKind::Jetstep &&
@@ -344,6 +384,25 @@ void Simulation::resolve_strikes() {
                 p.facing.x * impulse / kFixedScale;
             state_.core.velocity.y +=
                 p.facing.y * impulse / kFixedScale;
+            const std::int64_t forward_speed =
+                (static_cast<std::int64_t>(state_.core.velocity.x) *
+                     p.facing.x +
+                 static_cast<std::int64_t>(state_.core.velocity.y) *
+                     p.facing.y) /
+                kFixedScale;
+            if (forward_speed < kStrikeMinForwardSpeed) {
+                const std::int32_t shortfall = static_cast<std::int32_t>(
+                    kStrikeMinForwardSpeed - forward_speed);
+                state_.core.velocity.x += static_cast<std::int32_t>(
+                    static_cast<std::int64_t>(p.facing.x) * shortfall /
+                    kFixedScale);
+                state_.core.velocity.y += static_cast<std::int32_t>(
+                    static_cast<std::int64_t>(p.facing.y) * shortfall /
+                    kFixedScale);
+            }
+            state_.core.position =
+                push(state_.core.position, p.facing, kStrikeSeparation,
+                     kFixedScale);
             state_.core.velocity =
                 cap_length(state_.core.velocity, kCoreMaxSpeed);
             p.strike_has_hit = true;
@@ -376,6 +435,22 @@ void Simulation::apply_effect_forces() {
     state_.core.velocity = cap_length(state_.core.velocity, kCoreMaxSpeed);
 }
 
+void Simulation::apply_core_drag() {
+    CoreState& core = state_.core;
+    const std::uint64_t speed =
+        isqrt64(static_cast<std::uint64_t>(length_sq(core.velocity)));
+    if (speed <= static_cast<std::uint64_t>(kCoreDrag)) {
+        core.velocity = {0, 0};
+        return;
+    }
+    const Vec2 direction = normalize_velocity(core.velocity);
+    core.velocity.x -= static_cast<std::int32_t>(
+        static_cast<std::int64_t>(direction.x) * kCoreDrag / kFixedScale);
+    core.velocity.y -= static_cast<std::int32_t>(
+        static_cast<std::int64_t>(direction.y) * kCoreDrag / kFixedScale);
+    core.velocity = cap_length(core.velocity, kCoreMaxSpeed);
+}
+
 void Simulation::advance_core(StepResult& result) {
     if (state_.phase != Phase::Live) return;
 
@@ -406,8 +481,10 @@ void Simulation::advance_core(StepResult& result) {
 
         // Player collisions are resolved in fixed player order.
         for (const auto& p : state_.players) {
-            resolve_core_vs_circle(core, p.position, kPlayerRadius);
+            resolve_core_vs_circle(core, p.position, kPlayerRadius,
+                                   p.velocity);
         }
+        core.velocity = cap_length(core.velocity, kCoreMaxSpeed);
 
         // Goal detection before wall reflection.
         if (core.position.y >= kGoalTop && core.position.y <= kGoalBottom) {
@@ -430,21 +507,29 @@ void Simulation::advance_core(StepResult& result) {
         if (!in_goal_y) {
             if (core.position.x < kCoreRadius) {
                 core.position.x = 2 * kCoreRadius - core.position.x;
-                core.velocity.x = -core.velocity.x;
+                core.velocity.x = static_cast<std::int32_t>(
+                    -static_cast<std::int64_t>(core.velocity.x) *
+                    kCoreRestitution / kFixedScale);
             } else if (core.position.x > kFieldWidth - kCoreRadius) {
                 core.position.x =
                     2 * (kFieldWidth - kCoreRadius) - core.position.x;
-                core.velocity.x = -core.velocity.x;
+                core.velocity.x = static_cast<std::int32_t>(
+                    -static_cast<std::int64_t>(core.velocity.x) *
+                    kCoreRestitution / kFixedScale);
             }
         }
 
         if (core.position.y < kCoreRadius) {
             core.position.y = 2 * kCoreRadius - core.position.y;
-            core.velocity.y = -core.velocity.y;
+            core.velocity.y = static_cast<std::int32_t>(
+                -static_cast<std::int64_t>(core.velocity.y) *
+                kCoreRestitution / kFixedScale);
         } else if (core.position.y > kFieldHeight - kCoreRadius) {
             core.position.y =
                 2 * (kFieldHeight - kCoreRadius) - core.position.y;
-            core.velocity.y = -core.velocity.y;
+            core.velocity.y = static_cast<std::int32_t>(
+                -static_cast<std::int64_t>(core.velocity.y) *
+                kCoreRestitution / kFixedScale);
         }
     }
 }

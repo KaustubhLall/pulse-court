@@ -19,6 +19,9 @@ to the original Pulse Court ruleset.
 9. Each character ability activation, effect, cooldown, and expiry.
 10. All 324 actions decode into valid bounded inputs.
 11. Replay record/load/verify plus incompatible-version rejection.
+12. Core travel is not accidentally multiplied by nested substeps, separating
+    contacts do not reverse the core, a dash exceeds normal movement speed,
+    and strikes ignore a core behind the striker.
 
 ## Runtime validation
 

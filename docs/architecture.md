@@ -39,13 +39,18 @@ of `pulse_core`.
    - resolve player contacts in fixed order,
    - detect goals before wall reflection,
    - reflect off non-goal walls/top/bottom.
-9. If a goal was scored, update score and either finish the match or enter a
+9. Apply bounded core drag after a non-scoring tick. Contacts only reflect an
+   entering core, use restitution below one, and preserve a separating core's
+   direction to avoid jitter.
+10. If a goal was scored, update score and either finish the match or enter a
    90-tick `Kickoff` reset.
-10. Update the regulation clock; tied expiry enters golden goal.
+11. Update the regulation clock; tied expiry enters golden goal.
 
 ## Determinism guarantees
 
 - Fixed 120 Hz tick rate with no wall-clock dependence.
+- The core's velocity is integrated exactly once per simulation tick, divided
+  across two collision substeps; substeps cannot multiply travel distance.
 - No allocation inside `Simulation::step`.
 - All resolution order is explicit: players 0 then 1, gates before players,
   goals before wall bounces.

@@ -28,17 +28,24 @@ inline constexpr std::int32_t kCoreRadius = 358;    // ~0.35 world units
 inline constexpr std::int32_t kCoreSubsteps = 2;
 
 // Movement and physics constants (fixed units per tick where applicable).
-inline constexpr std::int32_t kPlayerMaxSpeed = 120;    // ~14.1 world units/sec
-inline constexpr std::int32_t kPlayerAccel = 12;        // fixed units/tick^2
-inline constexpr std::int32_t kPlayerFriction = 8;      // fixed units/tick^2
-inline constexpr std::int32_t kCoreMaxSpeed = 500;      // ~58.6 world units/sec
-inline constexpr std::int32_t kDashSpeed = 200;         // ~23.4 world units/sec
+// These are deliberately modest for a 32-unit court: the core can outpace a
+// player, but cannot traverse the field in a few simulation frames.
+inline constexpr std::int32_t kPlayerMaxSpeed = 80;     // ~9.4 world units/sec
+inline constexpr std::int32_t kPlayerAccel = 4;         // fixed units/tick^2
+inline constexpr std::int32_t kPlayerFriction = 4;      // fixed units/tick^2
+inline constexpr std::int32_t kCoreMaxSpeed = 300;      // ~35.2 world units/sec
+inline constexpr std::int32_t kCoreDrag = 2;            // fixed units/tick^2
+inline constexpr std::int32_t kCoreRestitution = 896;   // 87.5%, scaled by 1024
+inline constexpr std::int32_t kDashSpeed = 150;         // ~17.6 world units/sec
 
-inline constexpr std::int32_t kStrikeReach = 1024;      // 1.0 world unit reach
-inline constexpr std::int32_t kStrikeImpulse = 180;     // fixed units/tick
+inline constexpr std::int32_t kStrikeReach = 768;       // 0.75 world unit reach
+inline constexpr std::int32_t kStrikeImpulse = 170;     // fixed units/tick
+inline constexpr std::int32_t kStrikeMinForwardSpeed = 120;
+inline constexpr std::int32_t kStrikeForwardCos = 256;  // cos(theta) * 1024
+inline constexpr std::int32_t kStrikeSeparation = 48;
 inline constexpr std::int32_t kStrikeDuration = 6;      // ticks
-inline constexpr std::int32_t kStrikeCooldown = 60;     // ticks
-inline constexpr std::int32_t kDashCooldown = 180;      // ticks
+inline constexpr std::int32_t kStrikeCooldown = 36;     // ticks
+inline constexpr std::int32_t kDashCooldown = 144;      // ticks
 
 // Character-specific tuning.
 inline constexpr std::int32_t kKiteStrikeBonus = 90;            // fixed/tick
@@ -185,6 +192,7 @@ private:
     void resolve_player_motion();
     void resolve_strikes();
     void apply_effect_forces();
+    void apply_core_drag();
     void advance_core(StepResult& result);
     bool check_goal_line(StepResult& result);
     void score_goal(std::int32_t team, StepResult& result);

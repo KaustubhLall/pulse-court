@@ -17,7 +17,8 @@
 - **Move:** an eight-direction movement vector (or neutral). Movement has
   acceleration and a character-dependent speed cap.
 - **Strike:** a short directional hit pulse with a cooldown. A pulse can
-  contact the core at most once per swing and adds a directional impulse.
+  contact the core at most once per swing, only in front of the striker, and
+  adds a directional impulse with a minimum forward launch speed.
 - **Dash:** a universal directional burst with a cooldown.
 - **Ability:** one character-specific active ability with a cooldown.
 
@@ -53,3 +54,5 @@ Bastion a readable defensive placement tool.
 - The core advances through two collision substeps per 120 Hz tick.
 - Contacts are resolved in a fixed order with integer square-root normalization.
 - Exact-overlap fallbacks are deterministic and documented in the source code.
+- Wall, player, and Pulse Gate impacts use controlled restitution; the core
+  receives a small deterministic drag after non-scoring ticks.
