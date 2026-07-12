@@ -1,0 +1,47 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "vs-x64-debug",
+      "displayName": "Visual Studio x64 Debug",
+      "generator": "Visual Studio 18 2026",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build/debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "PULSE_BUILD_VIEWER": "ON"
+      }
+    },
+    {
+      "name": "vs-x64-release",
+      "displayName": "Visual Studio x64 Release",
+      "generator": "Visual Studio 18 2026",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build/release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "PULSE_BUILD_VIEWER": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "debug",
+      "configurePreset": "vs-x64-debug"
+    },
+    {
+      "name": "release",
+      "configurePreset": "vs-x64-release"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "test-debug",
+      "configurePreset": "vs-x64-debug"
+    },
+    {
+      "name": "test-release",
+      "configurePreset": "vs-x64-release"
+    }
+  ]
+}
