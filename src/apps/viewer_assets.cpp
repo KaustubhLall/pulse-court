@@ -23,27 +23,41 @@ std::string narrow(const wchar_t* w) {
     return s;
 }
 
-float direction_angle_deg(Vec2 dir) {
-    if (dir.x == 0 && dir.y == 0) return 0.0f;
-    double rad = std::atan2(-static_cast<double>(dir.y), static_cast<double>(dir.x));
-    return static_cast<float>(rad * 180.0 / kPi);
-}
-
 int cardinal_row(Vec2 facing) {
     std::int32_t ax = facing.x >= 0 ? facing.x : -facing.x;
     std::int32_t ay = facing.y >= 0 ? facing.y : -facing.y;
     if (ax > ay) {
         return facing.x >= 0 ? 1 : 3;  // east : west
     }
-    return facing.y >= 0 ? 0 : 2;  // north : south
+    // Row 0's art is front-facing (toward camera) and row 2's is back-facing
+    // (away from camera) in the source sheets, opposite of their "north"/
+    // "south" grid labels — swap here so a character facing away (north,
+    // facing.y >= 0) shows its back, and facing the camera (south) shows its
+    // front, without touching the sheets or their row-order labels.
+    return facing.y >= 0 ? 2 : 0;  // north : south
 }
 
 }  // namespace
 
+float direction_angle_deg(Vec2 dir) {
+    if (dir.x == 0 && dir.y == 0) return 0.0f;
+    double rad = std::atan2(-static_cast<double>(dir.y), static_cast<double>(dir.x));
+    return static_cast<float>(rad * 180.0 / kPi);
+}
+
 // Presentation-only multiplier for the on-screen player body sprite. The body
 // is drawn as a destination square of (world_radius * multiplier) pixels.
-// Calibrated to the clean-sheet tile size of 456 px: 5.7 = 4.0 * 456 / 320.
-constexpr double kPlayerBodySpriteSizeMultiplier = 5.7;
+// 4.8 is a starting point for a visual size pass; per-character tuning is out
+// of scope here.
+constexpr double kPlayerBodySpriteSizeMultiplier = 4.8;
+
+// Shared tile size and safety border used by scripts/clean_sprites.py. If the
+// cleaner prints a different "Using shared tile size" value, update
+// kCleanTileSize to match; kBodyFeetAnchorFraction is derived from them.
+constexpr int kCleanTileSize = 456;
+constexpr int kCleanSafetyBorder = 8;
+constexpr double kBodyFeetAnchorFraction =
+    static_cast<double>(kCleanTileSize - kCleanSafetyBorder) / kCleanTileSize;
 
 // Code-driven body pose transforms use a normalized "action progress" curve
 // that rises from 0 at action start to 1 at action end and maps through a
@@ -149,6 +163,30 @@ void draw_cooldown_bar(HDC hdc, int x, int y, int width, int height,
     char buf[64];
     snprintf(buf, sizeof(buf), "%s: %d/%d", label, current, max_val);
     draw_text(hdc, x, y + height + 2, buf, kTextDim, 12);
+}
+
+void draw_ellipse(HDC hdc, int x, int y, int rx, int ry, COLORREF stroke,
+                  int style, int width) {
+    HPEN pen = CreatePen(style, width, stroke);
+    HPEN old_pen = static_cast<HPEN>(SelectObject(hdc, pen));
+    HBRUSH old_brush =
+        static_cast<HBRUSH>(SelectObject(hdc, GetStockObject(NULL_BRUSH)));
+    Ellipse(hdc, x - rx, y - ry, x + rx, y + ry);
+    SelectObject(hdc, old_pen);
+    SelectObject(hdc, old_brush);
+    DeleteObject(pen);
+}
+
+void draw_filled_pie(HDC hdc, int x, int y, int r, float start_angle,
+                     float sweep_angle, COLORREF fill, std::uint8_t alpha) {
+    Gdiplus::Graphics gfx(hdc);
+    gfx.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    gfx.SetCompositingMode(Gdiplus::CompositingModeSourceOver);
+    Gdiplus::Color color(alpha, GetRValue(fill), GetGValue(fill),
+                         GetBValue(fill));
+    Gdiplus::SolidBrush brush(color);
+    gfx.FillPie(&brush, x - r, y - r, r * 2, r * 2, start_angle, sweep_angle);
+    gfx.Flush(Gdiplus::FlushIntentionFlush);
 }
 
 int world_to_screen_x(std::int32_t world_x, int court_width) {
@@ -280,7 +318,8 @@ const std::filesystem::path& AssetManager::assets_dir() const {
 
 bool AssetManager::draw_sprite(HDC hdc, SheetId id, int frame, int center_x,
                                int center_y, int dest_w, int dest_h,
-                               float angle_deg, float alpha) const {
+                               float angle_deg, float alpha,
+                               float anchor_y) const {
     Gdiplus::Bitmap* bmp = get(id);
     if (!bmp) return false;
 
@@ -319,15 +358,19 @@ bool AssetManager::draw_sprite(HDC hdc, SheetId id, int frame, int center_x,
         attr = &attr_obj;
     }
 
-    Gdiplus::Rect dest(center_x - dest_w / 2, center_y - dest_h / 2, dest_w,
-                       dest_h);
+    Gdiplus::Rect dest(
+        center_x - dest_w / 2,
+        center_y - static_cast<int>(dest_h * anchor_y),
+        dest_w, dest_h);
     if (angle_deg != 0.0f) {
         gfx.TranslateTransform(static_cast<Gdiplus::REAL>(center_x),
                                static_cast<Gdiplus::REAL>(center_y),
                                Gdiplus::MatrixOrderAppend);
         gfx.RotateTransform(static_cast<Gdiplus::REAL>(angle_deg),
                             Gdiplus::MatrixOrderAppend);
-        dest = Gdiplus::Rect(-dest_w / 2, -dest_h / 2, dest_w, dest_h);
+        dest = Gdiplus::Rect(-dest_w / 2,
+                             -static_cast<int>(dest_h * anchor_y),
+                             dest_w, dest_h);
     }
 
     gfx.DrawImage(bmp, dest, src_x, src_y, src_w, src_h, Gdiplus::UnitPixel,
@@ -783,6 +826,7 @@ void AnimationController::draw_body(HDC hdc, const AssetManager& assets, int cou
     int py = court_y + world_to_screen_y(p.position.y, court_height);
     int pr = world_radius_to_screen(kPlayerRadius, court_width);
     int row = cardinal_row(b.facing);
+    const float anchor_y = static_cast<float>(kBodyFeetAnchorFraction);
 
     // Try the real body sheet for the current animation state first. When it
     // is available, the authored frames provide the motion, so no procedural
@@ -792,7 +836,7 @@ void AnimationController::draw_body(HDC hdc, const AssetManager& assets, int cou
         int draw_w = static_cast<int>(pr * kPlayerBodySpriteSizeMultiplier);
         int draw_h = draw_w;
         if (assets.draw_sprite(hdc, result.sheet, result.frame, px, py, draw_w,
-                               draw_h, 0.0f, 1.0f)) {
+                               draw_h, 0.0f, 1.0f, anchor_y)) {
             return;
         }
     }
@@ -899,7 +943,7 @@ void AnimationController::draw_body(HDC hdc, const AssetManager& assets, int cou
     }
 
     if (assets.draw_sprite(hdc, sheet, frame, draw_x, draw_y, draw_w, draw_h,
-                           0.0f, 1.0f)) {
+                           0.0f, 1.0f, anchor_y)) {
         return;
     }
 

@@ -50,10 +50,21 @@ void draw_cooldown_bar(HDC hdc, int x, int y, int width, int height,
                        std::int32_t current, std::int32_t max_val,
                        const char* label);
 
+void draw_ellipse(HDC hdc, int x, int y, int rx, int ry, COLORREF stroke,
+                  int style = PS_SOLID, int width = 1);
+
+void draw_filled_pie(HDC hdc, int x, int y, int r, float start_angle,
+                     float sweep_angle, COLORREF fill,
+                     std::uint8_t alpha = 128);
+
 // Coordinate conversion
 int world_to_screen_x(std::int32_t world_x, int court_width);
 int world_to_screen_y(std::int32_t world_y, int court_height);
 int world_radius_to_screen(std::int32_t radius, int court_width);
+
+// Convert a fixed-point world direction to a screen-space angle in degrees.
+// 0 degrees points east; positive degrees sweep clockwise (y-down).
+float direction_angle_deg(Vec2 dir);
 
 // Locate the assets directory next to the executable, falling back to the
 // process working directory.
@@ -116,10 +127,13 @@ public:
 
     // Draw a single frame. The source rectangle is derived from the sheet grid.
     // angle_deg rotates around (center_x, center_y). alpha 0..1 fades the sprite.
+    // anchor_y positions the vertical anchor: 0 = top at center_y, 0.5 = center
+    // at center_y, 1.0 = bottom at center_y.
     [[nodiscard]] bool draw_sprite(HDC hdc, SheetId id, int frame, int center_x,
                                    int center_y, int dest_w, int dest_h,
                                    float angle_deg = 0.0f,
-                                   float alpha = 1.0f) const;
+                                   float alpha = 1.0f,
+                                   float anchor_y = 0.5f) const;
 
     // Draw a full image cropped to cover a destination rectangle while preserving
     // the source aspect ratio.

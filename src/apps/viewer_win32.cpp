@@ -39,6 +39,7 @@ constexpr std::size_t kFpsHistory = 30;
 constexpr std::size_t kMaxTraceEntries = 12;
 constexpr std::int32_t kBounceTraceCoalesceTicks = 2;
 const wchar_t kClassName[] = L"PulseCourtViewer";
+constexpr double kPi = 3.14159265358979323846;
 
 }  // namespace
 
@@ -140,6 +141,15 @@ EffectKind effect_kind_for_character(Character character) {
         case Character::Bastion: return EffectKind::PulseGate;
     }
     return EffectKind::None;
+}
+
+std::int32_t ability_cooldown_for_character(Character character) {
+    switch (character) {
+        case Character::Kite: return kJetstepCooldown;
+        case Character::Vale: return kAnchorCooldown;
+        case Character::Bastion: return kGateCooldown;
+    }
+    return kJetstepCooldown;
 }
 
 const char* effect_kind_name(EffectKind kind) {
@@ -403,7 +413,9 @@ static void render_sidebar(HDC hdc, int x, int y, int w, int h, int fps) {
         draw_cooldown_bar(hdc, card_x + 8, card_y + 40, card_w - 16, 10,
                           p.strike_cooldown, kStrikeCooldown, "Strike");
         draw_cooldown_bar(hdc, card_x + 8, card_y + 62, card_w - 16, 10,
-                          p.ability_cooldown, kAbilityCooldown, "Ability");
+                          p.ability_cooldown,
+                          ability_cooldown_for_character(p.character),
+                          "Ability");
         draw_cooldown_bar(hdc, card_x + 8, card_y + 84, card_w - 16, 10,
                           p.dash_cooldown, kDashCooldown, "Dash");
 
@@ -775,10 +787,18 @@ static void render_hitbox_overlay(HDC hdc, int court_x, int court_y, int court_w
         COLORREF color = (i == 0) ? kPlayer1Color : kPlayer2Color;
 
         int pr = world_radius_to_screen(kPlayerRadius, court_width);
-        draw_hollow_circle(hdc, px, py, pr, color, PS_DOT, 1);
+        // Footprint: horizontally the exact kPlayerRadius, vertically squashed
+        // 2:1 for presentation while the true gameplay radius stays exact.
+        draw_ellipse(hdc, px, py, pr, pr / 2, color, PS_DOT, 1);
 
-        int sr = world_radius_to_screen(kStrikeReach + kCoreRadius, court_width);
-        draw_hollow_circle(hdc, px, py, sr, color, PS_DOT, 1);
+        // Matches the true hit radius checked in Simulation::resolve_strikes.
+        int sr = world_radius_to_screen(kPlayerRadius + kStrikeReach + kCoreRadius,
+                                        court_width);
+        float facing = direction_angle_deg(p.facing);
+        float half = static_cast<float>(
+            std::acos(static_cast<double>(kStrikeForwardCos) / kFixedScale) *
+            180.0 / kPi);
+        draw_filled_pie(hdc, px, py, sr, facing - half, 2.0f * half, color, 50);
 
         Vec2 end_pos = {p.position.x + p.velocity.x * 30,
                         p.position.y + p.velocity.y * 30};
