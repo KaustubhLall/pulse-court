@@ -1,3 +1,5 @@
+#define NOMINMAX
+
 #include "viewer_assets.hpp"
 
 #include "fixed_math.hpp"
@@ -40,7 +42,8 @@ int cardinal_row(Vec2 facing) {
 
 // Presentation-only multiplier for the on-screen player body sprite. The body
 // is drawn as a destination square of (world_radius * multiplier) pixels.
-constexpr int kPlayerBodySpriteSizeMultiplier = 4;
+// Calibrated to the clean-sheet tile size of 456 px: 5.7 = 4.0 * 456 / 320.
+constexpr double kPlayerBodySpriteSizeMultiplier = 5.7;
 
 // Code-driven body pose transforms use a normalized "action progress" curve
 // that rises from 0 at action start to 1 at action end and maps through a
@@ -66,7 +69,7 @@ constexpr double kGoalLossPulseScale = 0.05;
 // Vale Anchor Well presentation scale. The sprite is rendered at this fraction
 // of the true diameter (2 * base_r) while the dotted radius ring stays at the
 // exact kAnchorRadius gameplay footprint.
-constexpr double kAnchorWellArtScale = 0.7;
+constexpr double kAnchorWellArtScale = 0.5;
 
 // GDI helpers
 void draw_circle(HDC hdc, int x, int y, int r, COLORREF fill, COLORREF stroke) {
@@ -196,29 +199,29 @@ const AssetManager::SheetInfo AssetManager::kSheets[static_cast<std::size_t>(
     {L"sprites/animated/goal_burst_4x3.png", 4, 3, 12},
     {L"sprites/animated/kickoff_pulse_4x2.png", 4, 2, 8},
     {L"sprites/clean/kite_idle_4x4.png", 4, 4, 16},
-    {L"sprites/animated/kite_move_loop_4x4.png", 4, 4, 16},
-    {L"sprites/animated/kite_move_transition_4x4.png", 4, 4, 16},
-    {L"sprites/animated/kite_strike_6x4.png", 6, 4, 24},
-    {L"sprites/animated/kite_dash_5x4.png", 5, 4, 20},
-    {L"sprites/animated/kite_ability_6x4.png", 6, 4, 24},
-    {L"sprites/animated/kite_goal_win_4x4.png", 4, 4, 16},
-    {L"sprites/animated/kite_goal_loss_4x4.png", 4, 4, 16},
+    {L"sprites/clean/kite_move_loop_4x4.png", 4, 4, 16},
+    {L"sprites/clean/kite_move_transition_4x4.png", 4, 4, 16},
+    {L"sprites/clean/kite_strike_6x4.png", 6, 4, 24},
+    {L"sprites/clean/kite_dash_5x4.png", 5, 4, 20},
+    {L"sprites/clean/kite_ability_6x4.png", 6, 4, 24},
+    {L"sprites/clean/kite_goal_win_4x4.png", 4, 4, 16},
+    {L"sprites/clean/kite_goal_loss_4x4.png", 4, 4, 16},
     {L"sprites/clean/vale_idle_4x4.png", 4, 4, 16},
-    {L"sprites/animated/vale_move_loop_4x4.png", 4, 4, 16},
-    {L"sprites/animated/vale_move_transition_4x4.png", 4, 4, 16},
-    {L"sprites/animated/vale_strike_6x4.png", 6, 4, 24},
-    {L"sprites/animated/vale_dash_5x4.png", 5, 4, 20},
-    {L"sprites/animated/vale_ability_6x4.png", 6, 4, 24},
-    {L"sprites/animated/vale_goal_win_4x4.png", 4, 4, 16},
-    {L"sprites/animated/vale_goal_loss_4x4.png", 4, 4, 16},
+    {L"sprites/clean/vale_move_loop_4x4.png", 4, 4, 16},
+    {L"sprites/clean/vale_move_transition_4x4.png", 4, 4, 16},
+    {L"sprites/clean/vale_strike_6x4.png", 6, 4, 24},
+    {L"sprites/clean/vale_dash_5x4.png", 5, 4, 20},
+    {L"sprites/clean/vale_ability_6x4.png", 6, 4, 24},
+    {L"sprites/clean/vale_goal_win_4x4.png", 4, 4, 16},
+    {L"sprites/clean/vale_goal_loss_4x4.png", 4, 4, 16},
     {L"sprites/clean/bastion_idle_4x4.png", 4, 4, 16},
-    {L"sprites/animated/bastion_move_loop_4x4.png", 4, 4, 16},
-    {L"sprites/animated/bastion_move_transition_4x4.png", 4, 4, 16},
-    {L"sprites/animated/bastion_strike_6x4.png", 6, 4, 24},
-    {L"sprites/animated/bastion_dash_5x4.png", 5, 4, 20},
-    {L"sprites/animated/bastion_ability_6x4.png", 6, 4, 24},
-    {L"sprites/animated/bastion_goal_win_4x4.png", 4, 4, 16},
-    {L"sprites/animated/bastion_goal_loss_4x4.png", 4, 4, 16},
+    {L"sprites/clean/bastion_move_loop_4x4.png", 4, 4, 16},
+    {L"sprites/clean/bastion_move_transition_4x4.png", 4, 4, 16},
+    {L"sprites/clean/bastion_strike_6x4.png", 6, 4, 24},
+    {L"sprites/clean/bastion_dash_5x4.png", 5, 4, 20},
+    {L"sprites/clean/bastion_ability_6x4.png", 6, 4, 24},
+    {L"sprites/clean/bastion_goal_win_4x4.png", 4, 4, 16},
+    {L"sprites/clean/bastion_goal_loss_4x4.png", 4, 4, 16},
 };
 
 bool AssetManager::load(const std::filesystem::path& assets_dir) {
@@ -267,7 +270,7 @@ bool AssetManager::has(SheetId id) const {
     return get(id) != nullptr;
 }
 
-const AssetManager::SheetInfo& AssetManager::info(SheetId id) const {
+const AssetManager::SheetInfo& AssetManager::info(SheetId id) {
     return kSheets[static_cast<std::size_t>(id)];
 }
 
@@ -415,6 +418,137 @@ void AnimationController::add_vfx(std::vector<Vfx>& list, SheetId sheet,
     list.push_back(v);
 }
 
+SheetId AnimationController::body_sheet(Character character, BodyAnim anim) const {
+    switch (character) {
+        case Character::Kite:
+            switch (anim) {
+                case BodyAnim::Idle:
+                    return SheetId::KiteIdle;
+                case BodyAnim::Move:
+                    return SheetId::KiteMoveLoop;
+                case BodyAnim::MoveStart:
+                case BodyAnim::MoveStop:
+                    return SheetId::KiteMoveTransition;
+                case BodyAnim::Strike:
+                    return SheetId::KiteStrike;
+                case BodyAnim::Dash:
+                    return SheetId::KiteDash;
+                case BodyAnim::Ability:
+                    return SheetId::KiteAbility;
+                case BodyAnim::GoalWin:
+                    return SheetId::KiteGoalWin;
+                case BodyAnim::GoalLoss:
+                    return SheetId::KiteGoalLoss;
+            }
+            break;
+        case Character::Vale:
+            switch (anim) {
+                case BodyAnim::Idle:
+                    return SheetId::ValeIdle;
+                case BodyAnim::Move:
+                    return SheetId::ValeMoveLoop;
+                case BodyAnim::MoveStart:
+                case BodyAnim::MoveStop:
+                    return SheetId::ValeMoveTransition;
+                case BodyAnim::Strike:
+                    return SheetId::ValeStrike;
+                case BodyAnim::Dash:
+                    return SheetId::ValeDash;
+                case BodyAnim::Ability:
+                    return SheetId::ValeAbility;
+                case BodyAnim::GoalWin:
+                    return SheetId::ValeGoalWin;
+                case BodyAnim::GoalLoss:
+                    return SheetId::ValeGoalLoss;
+            }
+            break;
+        case Character::Bastion:
+            switch (anim) {
+                case BodyAnim::Idle:
+                    return SheetId::BastionIdle;
+                case BodyAnim::Move:
+                    return SheetId::BastionMoveLoop;
+                case BodyAnim::MoveStart:
+                case BodyAnim::MoveStop:
+                    return SheetId::BastionMoveTransition;
+                case BodyAnim::Strike:
+                    return SheetId::BastionStrike;
+                case BodyAnim::Dash:
+                    return SheetId::BastionDash;
+                case BodyAnim::Ability:
+                    return SheetId::BastionAbility;
+                case BodyAnim::GoalWin:
+                    return SheetId::BastionGoalWin;
+                case BodyAnim::GoalLoss:
+                    return SheetId::BastionGoalLoss;
+            }
+            break;
+    }
+    return SheetId::KiteIdle;
+}
+
+const char* AnimationController::body_anim_name(BodyAnim anim) {
+    switch (anim) {
+        case BodyAnim::Idle: return "Idle";
+        case BodyAnim::MoveStart: return "MoveStart";
+        case BodyAnim::Move: return "Move";
+        case BodyAnim::MoveStop: return "MoveStop";
+        case BodyAnim::Strike: return "Strike";
+        case BodyAnim::Dash: return "Dash";
+        case BodyAnim::Ability: return "Ability";
+        case BodyAnim::GoalWin: return "GoalWin";
+        case BodyAnim::GoalLoss: return "GoalLoss";
+    }
+    return "Unknown";
+}
+
+AnimationController::BodyFrame AnimationController::resolve_body_frame(
+    Character character, const BodyState& b, int row) const {
+    SheetId sheet = body_sheet(character, b.anim);
+    const AssetManager::SheetInfo& s = AssetManager::info(sheet);
+    int cols = s.columns;
+    int frame = row * cols;
+    switch (b.anim) {
+        case BodyAnim::Idle:
+            frame = row * cols + ((b.elapsed / 15) % 4);
+            break;
+        case BodyAnim::Move:
+            frame = row * cols + ((b.elapsed / 10) % 4);
+            break;
+        case BodyAnim::MoveStart:
+            frame = row * cols + std::min(1, b.elapsed / 4);
+            break;
+        case BodyAnim::MoveStop:
+            frame = row * cols + 2 + std::min(1, b.elapsed / 4);
+            break;
+        case BodyAnim::Strike:
+            frame = row * cols + std::min(cols - 1, (b.elapsed * cols) / 18);
+            break;
+        case BodyAnim::Dash:
+            frame = row * cols + std::min(cols - 1, (b.elapsed * cols) / 16);
+            break;
+        case BodyAnim::Ability:
+            frame = row * cols + std::min(cols - 1, (b.elapsed * cols) / 18);
+            break;
+        case BodyAnim::GoalWin:
+        case BodyAnim::GoalLoss:
+            frame = row * cols + std::min(cols - 1, (b.elapsed * cols) / 40);
+            break;
+    }
+    return {sheet, frame};
+}
+
+AnimationController::BodyDebug AnimationController::body_debug(std::size_t idx) const {
+    const BodyState& b = bodies_[idx];
+    const PlayerState& p = state_.players[idx];
+    int row = cardinal_row(b.facing);
+    BodyFrame result = resolve_body_frame(p.character, b, row);
+    const AssetManager::SheetInfo& s = AssetManager::info(result.sheet);
+    int frame_in_row = result.frame % s.columns;
+    return {body_anim_name(b.anim), b.elapsed, result.sheet, frame_in_row,
+            s.columns};
+}
+
 void AnimationController::update(const GameState& state,
                                  const StepEvents& events) {
     state_ = state;
@@ -441,13 +575,13 @@ void AnimationController::update(const GameState& state,
         if (b.anim == BodyAnim::Idle && b.moving) {
             b.anim = BodyAnim::MoveStart;
             b.elapsed = 0;
-        } else if (b.anim == BodyAnim::MoveStart && b.elapsed >= 4) {
+        } else if (b.anim == BodyAnim::MoveStart && b.elapsed >= 8) {
             b.anim = BodyAnim::Move;
             b.elapsed = 0;
         } else if (b.anim == BodyAnim::Move && !b.moving) {
             b.anim = BodyAnim::MoveStop;
             b.elapsed = 0;
-        } else if (b.anim == BodyAnim::MoveStop && b.elapsed >= 4) {
+        } else if (b.anim == BodyAnim::MoveStop && b.elapsed >= 8) {
             b.anim = BodyAnim::Idle;
             b.elapsed = 0;
         } else if (b.anim == BodyAnim::Strike && b.elapsed >= 18) {
@@ -650,15 +784,29 @@ void AnimationController::draw_body(HDC hdc, const AssetManager& assets, int cou
     int pr = world_radius_to_screen(kPlayerRadius, court_width);
     int row = cardinal_row(b.facing);
 
-    // Use the clean idle sheet for the player body in every state. Raw
-    // move/strike/dash/ability/goal sheets are not sampled because their grid
-    // boundaries are not reliable. Action/goal states hold a stable frame while
-    // idle and movement states run the 4-frame idle loop.
-    SheetId sheet = SheetId::KiteIdle;
-    switch (p.character) {
-        case Character::Kite: sheet = SheetId::KiteIdle; break;
-        case Character::Vale: sheet = SheetId::ValeIdle; break;
-        case Character::Bastion: sheet = SheetId::BastionIdle; break;
+    // Try the real body sheet for the current animation state first. When it
+    // is available, the authored frames provide the motion, so no procedural
+    // squash/stretch/lunge transforms are applied.
+    BodyFrame result = resolve_body_frame(p.character, b, row);
+    if (assets.has(result.sheet)) {
+        int draw_w = static_cast<int>(pr * kPlayerBodySpriteSizeMultiplier);
+        int draw_h = draw_w;
+        if (assets.draw_sprite(hdc, result.sheet, result.frame, px, py, draw_w,
+                               draw_h, 0.0f, 1.0f)) {
+            return;
+        }
+    }
+
+    // Fallback: idle sheet with the original procedural pose transforms.
+    SheetId sheet = body_sheet(p.character, BodyAnim::Idle);
+
+    if (!assets.has(sheet)) {
+        COLORREF fill = (player_idx == 0) ? kPlayer1Color : kPlayer2Color;
+        draw_circle(hdc, px, py, pr, fill, RGB(240, 240, 240));
+        int fx = px + (b.facing.x * pr) / kFixedScale;
+        int fy = py - (b.facing.y * pr) / kFixedScale;
+        draw_line(hdc, px, py, fx, fy, RGB(255, 255, 0), 2);
+        return;
     }
 
     const AssetManager::SheetInfo& s = assets.info(sheet);
@@ -679,13 +827,13 @@ void AnimationController::draw_body(HDC hdc, const AssetManager& assets, int cou
             frame = row * cols + ((2 + b.elapsed / 2) % 4);
             break;
         default:
-            // Strike, Dash, Ability, and goal poses use a stable clean frame.
+            // Strike, Dash, Ability, and goal poses use a stable idle frame.
             break;
     }
 
     int draw_x = px;
     int draw_y = py;
-    int draw_w = pr * kPlayerBodySpriteSizeMultiplier;
+    int draw_w = static_cast<int>(pr * kPlayerBodySpriteSizeMultiplier);
     int draw_h = draw_w;
 
     switch (b.anim) {

@@ -110,7 +110,7 @@ public:
     bool load(const std::filesystem::path& assets_dir);
     [[nodiscard]] Gdiplus::Bitmap* get(SheetId id) const;
     [[nodiscard]] bool has(SheetId id) const;
-    [[nodiscard]] const SheetInfo& info(SheetId id) const;
+    [[nodiscard]] static const SheetInfo& info(SheetId id);
     [[nodiscard]] const std::filesystem::path& assets_dir() const;
     [[nodiscard]] const std::string& fallback_status() const;
 
@@ -144,6 +144,15 @@ public:
     void draw_entities(HDC hdc, const AssetManager& assets, int court_x,
                        int court_y, int court_width,
                        int court_height) const;
+
+    struct BodyDebug {
+        const char* anim_name = "";
+        int elapsed = 0;
+        SheetId sheet = SheetId::KiteIdle;
+        int frame = 0;
+        int frame_count = 0;
+    };
+    BodyDebug body_debug(std::size_t idx) const;
 
 private:
     enum class BodyAnim : std::uint8_t {
@@ -200,6 +209,16 @@ private:
     void add_vfx(std::vector<Vfx>& list, SheetId sheet, std::int32_t lifetime,
                  std::int32_t frame_duration, Vec2 position, Vec2 direction,
                  std::int8_t actor = -1);
+    [[nodiscard]] SheetId body_sheet(Character character, BodyAnim anim) const;
+
+    struct BodyFrame {
+        SheetId sheet = SheetId::KiteIdle;
+        int frame = 0;
+    };
+    [[nodiscard]] BodyFrame resolve_body_frame(Character character,
+                                               const BodyState& b,
+                                               int row) const;
+    [[nodiscard]] static const char* body_anim_name(BodyAnim anim);
     void draw_body(HDC hdc, const AssetManager& assets, int court_x,
                    int court_y, int court_width, int court_height,
                    std::size_t player_idx) const;

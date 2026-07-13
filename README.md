@@ -100,6 +100,15 @@ build\release\Release\pulse_viewer.exe --left kite --right bastion
 build\release\Release\pulse_viewer.exe --setup
 ```
 
+### Sprite gallery
+
+```cmd
+build\release\Release\pulse_viewer.exe --gallery
+```
+
+In gallery mode, the viewer shows one loaded sprite sheet at a time. Use
+`Up`/`Down` to switch sheets, `Left`/`Right` to switch frames, and `Esc` to quit.
+
 Running `pulse_viewer.exe` with no arguments, with `--setup`, or without both
 `--left` and `--right` opens the character-selection screen. Each player can
 pick Kite, Vale, or Bastion using the mouse or keyboard:
@@ -121,7 +130,11 @@ Mouse clicks on a card select that hero for that player. Press **Start Match**
 | Move: WASD | Move: IJKL (I=up, J=left, K=down, L=right) | Reset: R |
 | Strike: F | Strike: U | Pause: Space |
 | Ability: G | Ability: O | Quit: Esc |
-| Dash: H | Dash: P | |
+| Dash: H | Dash: P | Step: N (while paused) |
+| | | Hitbox overlay: F1 |
+| | | Animation debug: F2 |
+| | | Bot P2: B |
+| | | Sim speed: `[` / `]` |
 
 Aim defaults to the current movement direction; when movement is neutral the
 player keeps its last facing.

@@ -1,9 +1,13 @@
+#define NOMINMAX
+
 #include "pulse_sim.hpp"
+#include "fixed_math.hpp"
 #include "viewer_assets.hpp"
 #include "viewer_monitor.hpp"
 
 #include <windows.h>
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -67,6 +71,16 @@ static std::string g_monitor_name_narrow;
 
 static std::array<FrameInput, 2> g_input = {};
 static std::array<std::uint8_t, 2> g_pending_buttons = {};
+
+static bool g_gallery_mode = false;
+static int g_gallery_sheet_index = -1;
+static int g_gallery_frame = 0;
+
+static bool g_show_hitboxes = false;
+static bool g_show_anim_debug = false;
+static bool g_bot_active = false;
+static double g_sim_speed = 1.0;
+static bool g_step_requested = false;
 
 static int g_min_track_width = 0;
 static int g_min_track_height = 0;
@@ -179,6 +193,7 @@ static void poll_input() {
     g_input[1].move_x = 0;
     g_input[1].move_y = 0;
     g_input[1].buttons = ButtonNone;
+    g_step_requested = false;
 
     auto set_move = [](FrameInput& in, bool up, bool down, bool left, bool right) {
         if (up) in.move_y += 1;
@@ -208,7 +223,124 @@ static void poll_input() {
     }
     if (g_key_pressed[VK_ESCAPE]) g_quit_requested = true;
 
+    if (g_key_pressed['N'] && g_manual_pause) {
+        g_step_requested = true;
+        g_key_pressed['N'] = false;
+    }
+    if (g_key_pressed[VK_F1]) {
+        g_show_hitboxes = !g_show_hitboxes;
+        g_key_pressed[VK_F1] = false;
+    }
+    if (g_key_pressed[VK_F2]) {
+        g_show_anim_debug = !g_show_anim_debug;
+        g_key_pressed[VK_F2] = false;
+    }
+    if (g_key_pressed['B']) {
+        g_bot_active = !g_bot_active;
+        g_key_pressed['B'] = false;
+    }
+    if (g_key_pressed[VK_OEM_4]) {
+        g_sim_speed = (g_sim_speed <= 0.5 ? 0.25 : 0.5);
+        g_key_pressed[VK_OEM_4] = false;
+    }
+    if (g_key_pressed[VK_OEM_6]) {
+        g_sim_speed = (g_sim_speed >= 0.5 ? 1.0 : 0.5);
+        g_key_pressed[VK_OEM_6] = false;
+    }
+
     clear_edge_triggers();
+}
+
+static FrameInput compute_bot_input(const GameState& state) {
+    FrameInput in{};
+    const PlayerState& p = state.players[1];
+    const CoreState& core = state.core;
+
+    std::int64_t dx = core.position.x - p.position.x;
+    std::int64_t dy = core.position.y - p.position.y;
+    std::int64_t threshold = kFixedScale / 4;
+
+    auto sign = [](std::int64_t v, std::int64_t t) -> std::int8_t {
+        if (v > t) return 1;
+        if (v < -t) return -1;
+        return 0;
+    };
+
+    in.move_x = sign(dx, threshold);
+    in.move_y = sign(dy, threshold);
+    in.aim_x = in.move_x;
+    in.aim_y = in.move_y;
+
+    std::int64_t dist_sq = dx * dx + dy * dy;
+    std::uint64_t dist = isqrt64(static_cast<std::uint64_t>(dist_sq));
+
+    if (p.strike_cooldown == 0 &&
+        dist <= static_cast<std::uint64_t>(kStrikeReach + kCoreRadius)) {
+        in.buttons |= ButtonStrike;
+    }
+    if (p.dash_cooldown == 0 && dist > static_cast<std::uint64_t>(8 * kFixedScale)) {
+        in.buttons |= ButtonDash;
+    }
+    if (p.ability_cooldown == 0 &&
+        dist <= static_cast<std::uint64_t>(6 * kFixedScale)) {
+        in.buttons |= ButtonAbility;
+    }
+
+    return in;
+}
+
+static void advance_tick(Simulation& sim, const std::array<FrameInput, 2>& in) {
+    StepEvents events;
+    StepResult result = sim.step(in, &events);
+    g_anim.update(sim.state(), events);
+
+    static std::array<std::int32_t, 3> last_bounce_tick = {-1000, -1000, -1000};
+    for (std::uint8_t i = 0; i < events.count; ++i) {
+        const SimulationEvent& e = events.events[i];
+        const std::int32_t tick = static_cast<std::int32_t>(sim.state().tick);
+        if (e.type == SimulationEventType::CoreBounce) {
+            int idx = e.actor + 1;
+            if (tick - last_bounce_tick[idx] >= kBounceTraceCoalesceTicks) {
+                last_bounce_tick[idx] = tick;
+                char buf[96];
+                if (e.effect_kind == EffectKind::PulseGate) {
+                    snprintf(buf, sizeof(buf), "t%d: Core bounce off %s gate", tick,
+                             actor_name(e.actor));
+                } else if (e.actor == -1) {
+                    snprintf(buf, sizeof(buf), "t%d: Core bounce (wall)", tick);
+                } else {
+                    snprintf(buf, sizeof(buf), "t%d: Core bounce by %s", tick,
+                             actor_name(e.actor));
+                }
+                add_trace_entry(tick, buf, kTextDim);
+            }
+        } else if (e.type == SimulationEventType::StrikeStarted) {
+            char buf[96];
+            snprintf(buf, sizeof(buf), "t%d: Strike by %s", tick, actor_name(e.actor));
+            add_trace_entry(tick, buf, kTextDim);
+        } else if (e.type == SimulationEventType::StrikeHit) {
+            char buf[96];
+            snprintf(buf, sizeof(buf), "t%d: Strike hit by %s", tick, actor_name(e.actor));
+            add_trace_entry(tick, buf, kTextDim);
+        } else if (e.type == SimulationEventType::DashStarted) {
+            char buf[96];
+            snprintf(buf, sizeof(buf), "t%d: Dash by %s", tick, actor_name(e.actor));
+            add_trace_entry(tick, buf, kTextDim);
+        } else if (e.type == SimulationEventType::AbilityActivated) {
+            char buf[96];
+            snprintf(buf, sizeof(buf), "t%d: %s uses %s", tick, actor_name(e.actor),
+                     effect_kind_name(e.effect_kind));
+            add_trace_entry(tick, buf, kTextDim);
+        } else if (e.type == SimulationEventType::GoalScored) {
+            char buf[96];
+            snprintf(buf, sizeof(buf), "t%d: Goal by %s", tick, actor_name(e.actor, "Team"));
+            add_trace_entry(tick, buf, kTextMain);
+        }
+    }
+
+    if (result.match_finished) {
+        g_manual_pause = true;
+    }
 }
 
 static void render_sidebar(HDC hdc, int x, int y, int w, int h, int fps) {
@@ -296,6 +428,9 @@ static void render_sidebar(HDC hdc, int x, int y, int w, int h, int fps) {
     yy += 14;
     draw_text(hdc, x + 12, yy, "R Reset  Space Pause  Esc Quit", kTextDim, 12);
     yy += 14;
+    draw_text(hdc, x + 12, yy,
+              "F1 hitbox  F2 anim  B bot  N step  [ ] speed", kTextDim, 12);
+    yy += 14;
 
     int policy_h = h - (yy - y) - 10;
     if (policy_h > 0) {
@@ -311,7 +446,8 @@ static void render_sidebar(HDC hdc, int x, int y, int w, int h, int fps) {
 }
 
 static void render_footer(HDC hdc, int x, int y) {
-    char buf[128];
+    int yy = y;
+    char buf[256];
     if (g_sim) {
         const GameState& s = g_sim->state();
         snprintf(buf, sizeof(buf),
@@ -323,25 +459,59 @@ static void render_footer(HDC hdc, int x, int y) {
     } else {
         buf[0] = '\0';
     }
-    draw_text(hdc, x, y, buf, kTextDim, 12);
+    draw_text(hdc, x, yy, buf, kTextDim, 12);
+    yy += 14;
+
+    char status[128] = {0};
+    char* p = status;
+    std::size_t n = sizeof(status);
+    if (g_manual_pause) {
+        int written = snprintf(p, n, "PAUSED");
+        if (written > 0) {
+            p += written;
+            n -= written;
+        }
+    }
+    if (g_sim_speed != 1.0) {
+        int written = snprintf(p, n, "%sSpeed x%.2g",
+                               (status[0] != '\0') ? " | " : "",
+                               g_sim_speed);
+        if (written > 0) {
+            p += written;
+            n -= written;
+        }
+    }
+    if (g_bot_active) {
+        snprintf(p, n, "%sBOT P2", (status[0] != '\0') ? " | " : "");
+    }
+    if (status[0] != '\0') {
+        draw_text(hdc, x, yy, status, kTextMain, 12);
+        yy += 14;
+    }
+
     if (g_assets && !g_assets->fallback_status().empty()) {
-        draw_text(hdc, x, y + 16, g_assets->fallback_status().c_str(), kTextDim,
-                  12);
+        draw_text(hdc, x, yy, g_assets->fallback_status().c_str(), kTextDim, 12);
+        yy += 14;
     }
 
     if (g_passive || g_use_monitor_placement) {
-        char status[128] = {};
+        char monitor[128] = {};
         if (g_passive && g_use_monitor_placement) {
-            snprintf(status, sizeof(status), "PASSIVE | %s",
+            snprintf(monitor, sizeof(monitor), "PASSIVE | %s",
                      g_monitor_name_narrow.c_str());
         } else if (g_passive) {
-            snprintf(status, sizeof(status), "PASSIVE");
+            snprintf(monitor, sizeof(monitor), "PASSIVE");
         } else {
-            snprintf(status, sizeof(status), "MONITOR: %s",
+            snprintf(monitor, sizeof(monitor), "MONITOR: %s",
                      g_monitor_name_narrow.c_str());
         }
-        draw_text(hdc, x, y + 32, status, kTextDim, 12);
+        draw_text(hdc, x, yy, monitor, kTextDim, 12);
+        yy += 14;
     }
+
+    draw_text(hdc, x, yy,
+              "F1 hitbox / F2 anim / B bot / N step / [ ] speed",
+              kTextDim, 12);
 }
 
 static void render_setup(HDC hdc, int w, int h) {
@@ -491,6 +661,181 @@ static void handle_setup_input() {
     }
 }
 
+static void gallery_next(int dir) {
+    int count = static_cast<int>(SheetId::Count);
+    if (count <= 0 || !g_assets) return;
+    int idx = g_gallery_sheet_index;
+    for (int i = 0; i < count; ++i) {
+        idx = (idx + dir + count) % count;
+        if (g_assets->has(static_cast<SheetId>(idx))) {
+            g_gallery_sheet_index = idx;
+            g_gallery_frame = 0;
+            return;
+        }
+    }
+}
+
+static void handle_gallery_input() {
+    if (g_key_pressed[VK_ESCAPE]) {
+        g_quit_requested = true;
+        g_key_pressed[VK_ESCAPE] = false;
+    }
+    if (g_key_pressed[VK_UP]) {
+        gallery_next(1);
+        g_key_pressed[VK_UP] = false;
+    }
+    if (g_key_pressed[VK_DOWN]) {
+        gallery_next(-1);
+        g_key_pressed[VK_DOWN] = false;
+    }
+    if (g_gallery_sheet_index >= 0 && g_gallery_sheet_index < static_cast<int>(SheetId::Count) &&
+        g_assets) {
+        const AssetManager::SheetInfo& s =
+            g_assets->info(static_cast<SheetId>(g_gallery_sheet_index));
+        if (g_key_pressed[VK_LEFT]) {
+            g_gallery_frame = (g_gallery_frame - 1 + s.frames) % s.frames;
+            g_key_pressed[VK_LEFT] = false;
+        }
+        if (g_key_pressed[VK_RIGHT]) {
+            g_gallery_frame = (g_gallery_frame + 1) % s.frames;
+            g_key_pressed[VK_RIGHT] = false;
+        }
+    }
+    clear_edge_triggers();
+}
+
+static void render_gallery(HDC hdc, int w, int h) {
+    if (g_gallery_sheet_index < 0 || !g_assets ||
+        !g_assets->has(static_cast<SheetId>(g_gallery_sheet_index))) {
+        SetTextAlign(hdc, TA_CENTER | TA_TOP);
+        draw_text(hdc, w / 2, h / 2 - 30, "No assets loaded", kTextMain, 18);
+        draw_text(hdc, w / 2, h / 2, "Esc quit", kTextDim, 12);
+        SetTextAlign(hdc, TA_LEFT | TA_TOP);
+        return;
+    }
+
+    SheetId sheet = static_cast<SheetId>(g_gallery_sheet_index);
+    const AssetManager::SheetInfo& s = g_assets->info(sheet);
+    std::string name = narrow_arg(s.filename);
+
+    char header[256];
+    snprintf(header, sizeof(header),
+             "Sheet: %s | Grid %dx%d | Frame %d/%d",
+             name.c_str(), s.columns, s.rows, g_gallery_frame, s.frames);
+
+    SetTextAlign(hdc, TA_CENTER | TA_TOP);
+    draw_text(hdc, w / 2, 20, header, kTextMain, 16);
+    SetTextAlign(hdc, TA_LEFT | TA_TOP);
+
+    Gdiplus::Bitmap* bmp = g_assets->get(sheet);
+    int dest_w = 320;
+    int dest_h = 320;
+    if (bmp) {
+        int img_w = static_cast<int>(bmp->GetWidth());
+        int img_h = static_cast<int>(bmp->GetHeight());
+        double cell_w = static_cast<double>(img_w) / s.columns;
+        double cell_h = static_cast<double>(img_h) / s.rows;
+        double cell_max = std::max(cell_w, cell_h);
+        if (cell_max > 0.0) {
+            double scale = std::min(static_cast<double>(w), static_cast<double>(h)) * 0.5 / cell_max;
+            dest_w = static_cast<int>(cell_w * scale);
+            dest_h = static_cast<int>(cell_h * scale);
+        }
+    }
+
+    int cx = w / 2;
+    int cy = (h * 3) / 5;
+    (void)g_assets->draw_sprite(hdc, sheet, g_gallery_frame, cx, cy, dest_w, dest_h,
+                                0.0f, 1.0f);
+
+    int left = cx - dest_w / 2;
+    int top = cy - dest_h / 2;
+    int right = cx + dest_w / 2;
+    int bottom = cy + dest_h / 2;
+    draw_line(hdc, left, top, right, top, RGB(255, 255, 255), 1);
+    draw_line(hdc, right, top, right, bottom, RGB(255, 255, 255), 1);
+    draw_line(hdc, right, bottom, left, bottom, RGB(255, 255, 255), 1);
+    draw_line(hdc, left, bottom, left, top, RGB(255, 255, 255), 1);
+
+    SetTextAlign(hdc, TA_CENTER | TA_TOP);
+    draw_text(hdc, w / 2, h - 40,
+              "Up/Down: sheet   Left/Right: frame   Esc: quit", kTextDim, 12);
+    SetTextAlign(hdc, TA_LEFT | TA_TOP);
+}
+
+static void render_hitbox_overlay(HDC hdc, int court_x, int court_y, int court_width,
+                                  int court_height) {
+    if (!g_sim) return;
+    const GameState& s = g_sim->state();
+
+    for (std::size_t i = 0; i < s.players.size(); ++i) {
+        const PlayerState& p = s.players[i];
+        int px = court_x + world_to_screen_x(p.position.x, court_width);
+        int py = court_y + world_to_screen_y(p.position.y, court_height);
+        COLORREF color = (i == 0) ? kPlayer1Color : kPlayer2Color;
+
+        int pr = world_radius_to_screen(kPlayerRadius, court_width);
+        draw_hollow_circle(hdc, px, py, pr, color, PS_DOT, 1);
+
+        int sr = world_radius_to_screen(kStrikeReach + kCoreRadius, court_width);
+        draw_hollow_circle(hdc, px, py, sr, color, PS_DOT, 1);
+
+        Vec2 end_pos = {p.position.x + p.velocity.x * 30,
+                        p.position.y + p.velocity.y * 30};
+        int ex = court_x + world_to_screen_x(end_pos.x, court_width);
+        int ey = court_y + world_to_screen_y(end_pos.y, court_height);
+        int dx = ex - px;
+        int dy = ey - py;
+        int len = static_cast<int>(std::sqrt(static_cast<double>(dx) * dx +
+                                              static_cast<double>(dy) * dy));
+        if (len > 80) {
+            ex = px + dx * 80 / len;
+            ey = py + dy * 80 / len;
+        }
+        if (len > 0) {
+            draw_line(hdc, px, py, ex, ey, color, 2);
+        }
+
+        if (p.effect_kind == EffectKind::AnchorWell ||
+            p.effect_kind == EffectKind::PulseGate) {
+            int effect_radius = (p.effect_kind == EffectKind::AnchorWell)
+                                    ? kAnchorRadius
+                                    : kGateRadius;
+            int erx = court_x + world_to_screen_x(p.effect_position.x, court_width);
+            int ery = court_y + world_to_screen_y(p.effect_position.y, court_height);
+            int er = world_radius_to_screen(effect_radius, court_width);
+            draw_hollow_circle(hdc, erx, ery, er, color, PS_DOT, 1);
+        }
+    }
+
+    int cx = court_x + world_to_screen_x(s.core.position.x, court_width);
+    int cy = court_y + world_to_screen_y(s.core.position.y, court_height);
+    int cr = world_radius_to_screen(kCoreRadius, court_width);
+    draw_hollow_circle(hdc, cx, cy, cr, kCoreColor, PS_DOT, 1);
+}
+
+static void render_anim_debug(HDC hdc, int court_x, int court_y, int court_width,
+                              int court_height) {
+    if (!g_sim) return;
+    const GameState& s = g_sim->state();
+
+    for (std::size_t i = 0; i < s.players.size(); ++i) {
+        const PlayerState& p = s.players[i];
+        int px = court_x + world_to_screen_x(p.position.x, court_width);
+        int py = court_y + world_to_screen_y(p.position.y, court_height);
+        int pr = world_radius_to_screen(kPlayerRadius, court_width);
+
+        auto debug = g_anim.body_debug(i);
+        char buf[128];
+        snprintf(buf, sizeof(buf), "%s f%d/%d t%d", debug.anim_name, debug.frame,
+                 debug.frame_count, debug.elapsed);
+
+        SetTextAlign(hdc, TA_CENTER | TA_TOP);
+        draw_text(hdc, px, py - pr - 20, buf, kTextMain, 12);
+        SetTextAlign(hdc, TA_LEFT | TA_TOP);
+    }
+}
+
 static void render(HWND hwnd) {
     RECT rc;
     GetClientRect(hwnd, &rc);
@@ -508,6 +853,8 @@ static void render(HWND hwnd) {
 
     if (g_setup_mode) {
         render_setup(hdc, w, h);
+    } else if (g_gallery_mode) {
+        render_gallery(hdc, w, h);
     } else {
         int sidebar_x = w - kSidebarWidth - kCourtPadding;
         int sidebar_y = kCourtPadding;
@@ -549,6 +896,13 @@ static void render(HWND hwnd) {
             draw_court_lines(hdc, *g_assets, draw_x, draw_y, draw_w, draw_h);
 
             g_anim.draw_entities(hdc, *g_assets, draw_x, draw_y, draw_w, draw_h);
+
+            if (g_show_hitboxes) {
+                render_hitbox_overlay(hdc, draw_x, draw_y, draw_w, draw_h);
+            }
+            if (g_show_anim_debug) {
+                render_anim_debug(hdc, draw_x, draw_y, draw_w, draw_h);
+            }
 
             render_footer(hdc, draw_x, draw_y + draw_h + 4);
         }
@@ -633,6 +987,8 @@ int viewer_main(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         std::string arg = narrow_arg(argv[i]);
         if (arg == "--setup") {
             g_setup_mode = true;
+        } else if (arg == "--gallery") {
+            g_gallery_mode = true;
         } else if (arg == "--passive") {
             g_passive = true;
         } else if (arg == "--left" && i + 1 < argc) {
@@ -649,7 +1005,9 @@ int viewer_main(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     }
     LocalFree(argv);
 
-    if (!left_set || !right_set) {
+    if (g_gallery_mode) {
+        g_setup_mode = false;
+    } else if (!left_set || !right_set) {
         g_setup_mode = true;
     }
 
@@ -704,6 +1062,10 @@ int viewer_main(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     std::filesystem::path assets_dir = find_assets_directory();
     g_assets->load(assets_dir);
 
+    if (g_gallery_mode) {
+        gallery_next(1);
+    }
+
     WNDCLASSW wc = {};
     wc.lpfnWndProc = WndProc;
     wc.hInstance = hInstance;
@@ -748,8 +1110,9 @@ int viewer_main(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     }
 
     DWORD ex_style = g_passive ? WS_EX_NOACTIVATE : 0;
+    const wchar_t* window_title = g_gallery_mode ? L"Pulse Court - Gallery" : L"Pulse Court";
     g_hwnd = CreateWindowExW(
-        ex_style, kClassName, L"Pulse Court", WS_OVERLAPPEDWINDOW, window_x,
+        ex_style, kClassName, window_title, WS_OVERLAPPEDWINDOW, window_x,
         window_y, window_width, window_height, nullptr, nullptr, hInstance,
         nullptr);
     if (!g_hwnd) {
@@ -790,6 +1153,17 @@ int viewer_main(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
         if (delta > kMaxCatchUp) delta = kMaxCatchUp;
 
+        if (g_gallery_mode) {
+            handle_gallery_input();
+            g_render_accumulated_time += delta;
+            if (g_render_accumulated_time >= kRenderDt) {
+                g_render_accumulated_time -= kRenderDt;
+                render(g_hwnd);
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            continue;
+        }
+
         if (g_setup_mode) {
             handle_setup_input();
             if (g_start_match) {
@@ -804,6 +1178,7 @@ int viewer_main(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                 g_reset_requested = false;
                 g_input = {};
                 g_pending_buttons = {};
+                g_step_requested = false;
                 clear_edge_triggers();
                 continue;
             }
@@ -822,6 +1197,7 @@ int viewer_main(HINSTANCE hInstance, HINSTANCE hPrevInstance,
             g_manual_pause = false;
             g_input = {};
             g_pending_buttons = {};
+            g_step_requested = false;
             continue;
         }
 
@@ -829,79 +1205,30 @@ int viewer_main(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
         bool should_step = (g_has_focus || g_passive) && !g_manual_pause;
         if (should_step) {
-            g_accumulated_time += delta;
+            g_accumulated_time += delta * g_sim_speed;
             while (g_accumulated_time >= kSimDt) {
                 std::array<FrameInput, 2> in = g_input;
                 in[0].buttons = g_pending_buttons[0];
                 in[1].buttons = g_pending_buttons[1];
-                g_pending_buttons[0] = ButtonNone;
-                g_pending_buttons[1] = ButtonNone;
-                StepEvents events;
-                StepResult result = sim.step(in, &events);
-                g_anim.update(sim.state(), events);
-
-                static std::array<std::int32_t, 3> last_bounce_tick = {
-                    -1000, -1000, -1000};
-                for (std::uint8_t i = 0; i < events.count; ++i) {
-                    const SimulationEvent& e = events.events[i];
-                    const std::int32_t tick =
-                        static_cast<std::int32_t>(sim.state().tick);
-                    if (e.type == SimulationEventType::CoreBounce) {
-                        int idx = e.actor + 1;
-                        if (tick - last_bounce_tick[idx] >=
-                            kBounceTraceCoalesceTicks) {
-                            last_bounce_tick[idx] = tick;
-                            char buf[96];
-                            if (e.effect_kind == EffectKind::PulseGate) {
-                                snprintf(buf, sizeof(buf),
-                                         "t%d: Core bounce off %s gate", tick,
-                                         actor_name(e.actor));
-                            } else if (e.actor == -1) {
-                                snprintf(buf, sizeof(buf),
-                                         "t%d: Core bounce (wall)", tick);
-                            } else {
-                                snprintf(buf, sizeof(buf),
-                                         "t%d: Core bounce by %s", tick,
-                                         actor_name(e.actor));
-                            }
-                            add_trace_entry(tick, buf, kTextDim);
-                        }
-                    } else if (e.type == SimulationEventType::StrikeStarted) {
-                        char buf[96];
-                        snprintf(buf, sizeof(buf), "t%d: Strike by %s", tick,
-                                 actor_name(e.actor));
-                        add_trace_entry(tick, buf, kTextDim);
-                    } else if (e.type == SimulationEventType::StrikeHit) {
-                        char buf[96];
-                        snprintf(buf, sizeof(buf), "t%d: Strike hit by %s",
-                                 tick, actor_name(e.actor));
-                        add_trace_entry(tick, buf, kTextDim);
-                    } else if (e.type == SimulationEventType::DashStarted) {
-                        char buf[96];
-                        snprintf(buf, sizeof(buf), "t%d: Dash by %s", tick,
-                                 actor_name(e.actor));
-                        add_trace_entry(tick, buf, kTextDim);
-                    } else if (e.type ==
-                               SimulationEventType::AbilityActivated) {
-                        char buf[96];
-                        snprintf(buf, sizeof(buf), "t%d: %s uses %s", tick,
-                                 actor_name(e.actor),
-                                 effect_kind_name(e.effect_kind));
-                        add_trace_entry(tick, buf, kTextDim);
-                    } else if (e.type == SimulationEventType::GoalScored) {
-                        char buf[96];
-                        snprintf(buf, sizeof(buf), "t%d: Goal by %s", tick,
-                                 actor_name(e.actor, "Team"));
-                        add_trace_entry(tick, buf, kTextMain);
-                    }
+                g_pending_buttons = {};
+                if (g_bot_active) {
+                    in[1] = compute_bot_input(sim.state());
                 }
-
-                if (result.match_finished) {
-                    g_manual_pause = true;
-                }
-
+                advance_tick(sim, in);
                 g_accumulated_time -= kSimDt;
             }
+        }
+
+        if (g_step_requested) {
+            std::array<FrameInput, 2> in = g_input;
+            in[0].buttons = g_pending_buttons[0];
+            in[1].buttons = g_pending_buttons[1];
+            g_pending_buttons = {};
+            if (g_bot_active) {
+                in[1] = compute_bot_input(sim.state());
+            }
+            advance_tick(sim, in);
+            g_step_requested = false;
         }
 
         g_render_accumulated_time += delta;
