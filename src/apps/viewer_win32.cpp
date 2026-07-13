@@ -39,6 +39,7 @@ constexpr std::size_t kFpsHistory = 30;
 constexpr std::size_t kMaxTraceEntries = 12;
 constexpr std::int32_t kBounceTraceCoalesceTicks = 2;
 const wchar_t kClassName[] = L"PulseCourtViewer";
+constexpr double kPi = 3.14159265358979323846;
 
 }  // namespace
 
@@ -78,6 +79,7 @@ static int g_gallery_frame = 0;
 
 static bool g_show_hitboxes = false;
 static bool g_show_anim_debug = false;
+static bool g_pseudo3d = false;
 static bool g_bot_active = false;
 static double g_sim_speed = 1.0;
 static bool g_step_requested = false;
@@ -140,6 +142,15 @@ EffectKind effect_kind_for_character(Character character) {
         case Character::Bastion: return EffectKind::PulseGate;
     }
     return EffectKind::None;
+}
+
+std::int32_t ability_cooldown_for_character(Character character) {
+    switch (character) {
+        case Character::Kite: return kJetstepCooldown;
+        case Character::Vale: return kAnchorCooldown;
+        case Character::Bastion: return kGateCooldown;
+    }
+    return kJetstepCooldown;
 }
 
 const char* effect_kind_name(EffectKind kind) {
@@ -234,6 +245,10 @@ static void poll_input() {
     if (g_key_pressed[VK_F2]) {
         g_show_anim_debug = !g_show_anim_debug;
         g_key_pressed[VK_F2] = false;
+    }
+    if (g_key_pressed[VK_F3]) {
+        g_pseudo3d = !g_pseudo3d;
+        g_key_pressed[VK_F3] = false;
     }
     if (g_key_pressed['B']) {
         g_bot_active = !g_bot_active;
@@ -403,7 +418,9 @@ static void render_sidebar(HDC hdc, int x, int y, int w, int h, int fps) {
         draw_cooldown_bar(hdc, card_x + 8, card_y + 40, card_w - 16, 10,
                           p.strike_cooldown, kStrikeCooldown, "Strike");
         draw_cooldown_bar(hdc, card_x + 8, card_y + 62, card_w - 16, 10,
-                          p.ability_cooldown, kAbilityCooldown, "Ability");
+                          p.ability_cooldown,
+                          ability_cooldown_for_character(p.character),
+                          "Ability");
         draw_cooldown_bar(hdc, card_x + 8, card_y + 84, card_w - 16, 10,
                           p.dash_cooldown, kDashCooldown, "Dash");
 
@@ -429,7 +446,7 @@ static void render_sidebar(HDC hdc, int x, int y, int w, int h, int fps) {
     draw_text(hdc, x + 12, yy, "R Reset  Space Pause  Esc Quit", kTextDim, 12);
     yy += 14;
     draw_text(hdc, x + 12, yy,
-              "F1 hitbox  F2 anim  B bot  N step  [ ] speed", kTextDim, 12);
+              "F1 hitbox  F2 anim  F3 3D  B bot  N step  [ ] speed", kTextDim, 12);
     yy += 14;
 
     int policy_h = h - (yy - y) - 10;
@@ -481,6 +498,14 @@ static void render_footer(HDC hdc, int x, int y) {
             n -= written;
         }
     }
+    if (g_pseudo3d) {
+        int written = snprintf(p, n, "%sPSEUDO-3D",
+                               (status[0] != '\0') ? " | " : "");
+        if (written > 0) {
+            p += written;
+            n -= written;
+        }
+    }
     if (g_bot_active) {
         snprintf(p, n, "%sBOT P2", (status[0] != '\0') ? " | " : "");
     }
@@ -510,7 +535,7 @@ static void render_footer(HDC hdc, int x, int y) {
     }
 
     draw_text(hdc, x, yy,
-              "F1 hitbox / F2 anim / B bot / N step / [ ] speed",
+              "F1 hitbox / F2 anim / F3 3D / B bot / N step / [ ] speed",
               kTextDim, 12);
 }
 
@@ -775,10 +800,18 @@ static void render_hitbox_overlay(HDC hdc, int court_x, int court_y, int court_w
         COLORREF color = (i == 0) ? kPlayer1Color : kPlayer2Color;
 
         int pr = world_radius_to_screen(kPlayerRadius, court_width);
-        draw_hollow_circle(hdc, px, py, pr, color, PS_DOT, 1);
+        // Footprint: horizontally the exact kPlayerRadius, vertically squashed
+        // 2:1 for presentation while the true gameplay radius stays exact.
+        draw_ellipse(hdc, px, py, pr, pr / 2, color, PS_DOT, 1);
 
-        int sr = world_radius_to_screen(kStrikeReach + kCoreRadius, court_width);
-        draw_hollow_circle(hdc, px, py, sr, color, PS_DOT, 1);
+        // Matches the true hit radius checked in Simulation::resolve_strikes.
+        int sr = world_radius_to_screen(kPlayerRadius + kStrikeReach + kCoreRadius,
+                                        court_width);
+        float facing = direction_angle_deg(p.facing);
+        float half = static_cast<float>(
+            std::acos(static_cast<double>(kStrikeForwardCos) / kFixedScale) *
+            180.0 / kPi);
+        draw_filled_pie(hdc, px, py, sr, facing - half, 2.0f * half, color, 50);
 
         Vec2 end_pos = {p.position.x + p.velocity.x * 30,
                         p.position.y + p.velocity.y * 30};
@@ -874,6 +907,12 @@ static void render(HWND hwnd) {
         }
         int draw_x = court_x + (available_w - draw_w) / 2;
         int draw_y = court_y + (available_h - draw_h) / 2;
+
+        if (g_pseudo3d) {
+            int compressed_h = static_cast<int>(draw_h * 0.85);
+            draw_y += (draw_h - compressed_h) / 2;
+            draw_h = compressed_h;
+        }
 
         int fps = 0;
         double now = std::chrono::duration<double>(

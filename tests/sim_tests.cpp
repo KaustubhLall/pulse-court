@@ -364,7 +364,8 @@ void test_strike_and_dash() {
 }
 
 void test_abilities() {
-    auto test_activation = [](Character c, EffectKind expected) {
+    auto test_activation = [](Character c, EffectKind expected,
+                              std::int32_t expected_cooldown) {
         Simulation sim;
         GameState s = sim.state();
         s.phase = Phase::Live;
@@ -379,15 +380,15 @@ void test_abilities() {
         sim.step(in);
         check(sim.state().players[0].effect_kind == expected,
               "ability activation sets effect");
-        check(sim.state().players[0].ability_cooldown == kAbilityCooldown,
+        check(sim.state().players[0].ability_cooldown == expected_cooldown,
               "ability sets cooldown");
         check(sim.state().players[0].effect_ticks > 0,
               "ability sets effect duration");
     };
 
-    test_activation(Character::Kite, EffectKind::Jetstep);
-    test_activation(Character::Vale, EffectKind::AnchorWell);
-    test_activation(Character::Bastion, EffectKind::PulseGate);
+    test_activation(Character::Kite, EffectKind::Jetstep, kJetstepCooldown);
+    test_activation(Character::Vale, EffectKind::AnchorWell, kAnchorCooldown);
+    test_activation(Character::Bastion, EffectKind::PulseGate, kGateCooldown);
 
     // Cooldown gate.
     {

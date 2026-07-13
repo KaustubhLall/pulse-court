@@ -133,6 +133,7 @@ Mouse clicks on a card select that hero for that player. Press **Start Match**
 | Dash: H | Dash: P | Step: N (while paused) |
 | | | Hitbox overlay: F1 |
 | | | Animation debug: F2 |
+| | | Pseudo-3D compression: F3 |
 | | | Bot P2: B |
 | | | Sim speed: `[` / `]` |
 

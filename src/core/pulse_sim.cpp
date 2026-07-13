@@ -255,21 +255,23 @@ void Simulation::apply_player_input(std::int32_t player_index,
     }
 
     if ((input.buttons & ButtonAbility) && p.ability_cooldown == 0) {
-        p.ability_cooldown = kAbilityCooldown;
         p.jetstep_bonus_used = false;
         p.effect_position = p.position;
         switch (p.character) {
             case Character::Kite:
+                p.ability_cooldown = kJetstepCooldown;
                 p.effect_kind = EffectKind::Jetstep;
                 p.effect_ticks = kJetstepDuration;
                 break;
             case Character::Vale:
+                p.ability_cooldown = kAnchorCooldown;
                 p.effect_kind = EffectKind::AnchorWell;
                 p.effect_ticks = kAnchorDuration;
                 p.effect_position =
                     push(p.position, p.facing, kAnchorOffset, kFixedScale);
                 break;
             case Character::Bastion:
+                p.ability_cooldown = kGateCooldown;
                 p.effect_kind = EffectKind::PulseGate;
                 p.effect_ticks = kGateDuration;
                 p.effect_position =
