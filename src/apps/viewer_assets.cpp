@@ -189,6 +189,18 @@ void draw_filled_pie(HDC hdc, int x, int y, int r, float start_angle,
     gfx.Flush(Gdiplus::FlushIntentionFlush);
 }
 
+void draw_filled_ellipse(HDC hdc, int x, int y, int rx, int ry, COLORREF fill,
+                         std::uint8_t alpha) {
+    Gdiplus::Graphics gfx(hdc);
+    gfx.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+    gfx.SetCompositingMode(Gdiplus::CompositingModeSourceOver);
+    Gdiplus::Color color(alpha, GetRValue(fill), GetGValue(fill),
+                         GetBValue(fill));
+    Gdiplus::SolidBrush brush(color);
+    gfx.FillEllipse(&brush, x - rx, y - ry, rx * 2, ry * 2);
+    gfx.Flush(Gdiplus::FlushIntentionFlush);
+}
+
 int world_to_screen_x(std::int32_t world_x, int court_width) {
     std::int64_t v = static_cast<std::int64_t>(world_x) * court_width / kFieldWidth;
     return static_cast<int>(v);
@@ -794,20 +806,52 @@ void AnimationController::draw_entities(HDC hdc, const AssetManager& assets,
         draw_vfx(hdc, assets, court_x, court_y, court_width, court_height, v);
     }
 
-    // Players.
+    // Players and core are drawn in ascending screen-Y order so entities that
+    // are visually further south occlude those further north. Each entity draws
+    // its shadow immediately before its own sprite.
+    struct EntityItem {
+        int py;
+        bool is_core;
+        std::size_t player_idx;
+        int px;
+        int pr;
+    };
+    std::array<EntityItem, 3> entities;
     for (std::size_t i = 0; i < state_.players.size(); ++i) {
-        draw_body(hdc, assets, court_x, court_y, court_width, court_height, i);
+        const PlayerState& p = state_.players[i];
+        int px = court_x + world_to_screen_x(p.position.x, court_width);
+        int py = court_y + world_to_screen_y(p.position.y, court_height);
+        int pr = world_radius_to_screen(kPlayerRadius, court_width);
+        entities[i] = {py, false, i, px, pr};
+    }
+    {
+        const CoreState& core = state_.core;
+        int cx = court_x + world_to_screen_x(core.position.x, court_width);
+        int cy = court_y + world_to_screen_y(core.position.y, court_height);
+        int cr = world_radius_to_screen(kCoreRadius, court_width);
+        entities[2] = {cy, true, 0, cx, cr};
     }
 
-    // Core.
-    {
-        int cx = court_x + world_to_screen_x(state_.core.position.x, court_width);
-        int cy = court_y + world_to_screen_y(state_.core.position.y, court_height);
-        int cr = world_radius_to_screen(kCoreRadius, court_width);
-        int frame = (state_.tick / 4) % 8;
-        if (!assets.draw_sprite(hdc, SheetId::CoreSpin, frame, cx, cy, cr * 3,
-                                cr * 3, 0.0f, 1.0f)) {
-            draw_circle(hdc, cx, cy, cr, kCoreColor, RGB(200, 200, 200));
+    std::sort(entities.begin(), entities.end(),
+              [](const EntityItem& a, const EntityItem& b) {
+                  return a.py < b.py;
+              });
+
+    for (const auto& e : entities) {
+        draw_filled_ellipse(hdc, e.px, e.py,
+                            static_cast<int>(e.pr * 0.8),
+                            static_cast<int>(e.pr * 0.35),
+                            RGB(0, 0, 0), 80);
+        if (e.is_core) {
+            int frame = (state_.tick / 4) % 8;
+            if (!assets.draw_sprite(hdc, SheetId::CoreSpin, frame, e.px, e.py,
+                                    e.pr * 3, e.pr * 3, 0.0f, 1.0f)) {
+                draw_circle(hdc, e.px, e.py, e.pr, kCoreColor,
+                            RGB(200, 200, 200));
+            }
+        } else {
+            draw_body(hdc, assets, court_x, court_y, court_width, court_height,
+                      e.player_idx);
         }
     }
 

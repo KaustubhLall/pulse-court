@@ -79,6 +79,7 @@ static int g_gallery_frame = 0;
 
 static bool g_show_hitboxes = false;
 static bool g_show_anim_debug = false;
+static bool g_pseudo3d = false;
 static bool g_bot_active = false;
 static double g_sim_speed = 1.0;
 static bool g_step_requested = false;
@@ -244,6 +245,10 @@ static void poll_input() {
     if (g_key_pressed[VK_F2]) {
         g_show_anim_debug = !g_show_anim_debug;
         g_key_pressed[VK_F2] = false;
+    }
+    if (g_key_pressed[VK_F3]) {
+        g_pseudo3d = !g_pseudo3d;
+        g_key_pressed[VK_F3] = false;
     }
     if (g_key_pressed['B']) {
         g_bot_active = !g_bot_active;
@@ -441,7 +446,7 @@ static void render_sidebar(HDC hdc, int x, int y, int w, int h, int fps) {
     draw_text(hdc, x + 12, yy, "R Reset  Space Pause  Esc Quit", kTextDim, 12);
     yy += 14;
     draw_text(hdc, x + 12, yy,
-              "F1 hitbox  F2 anim  B bot  N step  [ ] speed", kTextDim, 12);
+              "F1 hitbox  F2 anim  F3 3D  B bot  N step  [ ] speed", kTextDim, 12);
     yy += 14;
 
     int policy_h = h - (yy - y) - 10;
@@ -494,7 +499,14 @@ static void render_footer(HDC hdc, int x, int y) {
         }
     }
     if (g_bot_active) {
-        snprintf(p, n, "%sBOT P2", (status[0] != '\0') ? " | " : "");
+        int written = snprintf(p, n, "%sBOT P2", (status[0] != '\0') ? " | " : "");
+        if (written > 0) {
+            p += written;
+            n -= written;
+        }
+    }
+    if (g_pseudo3d) {
+        snprintf(p, n, "%sPSEUDO-3D", (status[0] != '\0') ? " | " : "");
     }
     if (status[0] != '\0') {
         draw_text(hdc, x, yy, status, kTextMain, 12);
@@ -522,7 +534,7 @@ static void render_footer(HDC hdc, int x, int y) {
     }
 
     draw_text(hdc, x, yy,
-              "F1 hitbox / F2 anim / B bot / N step / [ ] speed",
+              "F1 hitbox / F2 anim / F3 3D / B bot / N step / [ ] speed",
               kTextDim, 12);
 }
 
@@ -894,6 +906,12 @@ static void render(HWND hwnd) {
         }
         int draw_x = court_x + (available_w - draw_w) / 2;
         int draw_y = court_y + (available_h - draw_h) / 2;
+
+        if (g_pseudo3d) {
+            int compressed_h = static_cast<int>(draw_h * 0.85);
+            draw_y += (draw_h - compressed_h) / 2;
+            draw_h = compressed_h;
+        }
 
         int fps = 0;
         double now = std::chrono::duration<double>(

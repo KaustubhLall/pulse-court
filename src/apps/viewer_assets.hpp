@@ -57,6 +57,9 @@ void draw_filled_pie(HDC hdc, int x, int y, int r, float start_angle,
                      float sweep_angle, COLORREF fill,
                      std::uint8_t alpha = 128);
 
+void draw_filled_ellipse(HDC hdc, int x, int y, int rx, int ry, COLORREF fill,
+                         std::uint8_t alpha);
+
 // Coordinate conversion
 int world_to_screen_x(std::int32_t world_x, int court_width);
 int world_to_screen_y(std::int32_t world_y, int court_height);

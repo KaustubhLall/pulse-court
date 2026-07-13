@@ -58,6 +58,7 @@ documents the same file paths and frame conventions.
   input to prevent stuck keys.
 - QA/debug controls: `Space` pause, `N` step one sim tick while paused, `[` and
   `]` cycle sim speed (0.25x / 0.5x / 1.0x), `F1` hitbox overlay, `F2` animation
-  debug overlay, `B` toggle deterministic P2 bot.
+  debug overlay, `F3` pseudo-3D compression toggle, `B` toggle deterministic P2
+  bot.
 - `--gallery` launches a sprite-sheet gallery for inspecting every loaded sheet
   and frame.
