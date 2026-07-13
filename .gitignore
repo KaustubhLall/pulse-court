@@ -5,3 +5,7 @@
 *.pdb
 *.ilk
 *.pulse
+
+# User-supplied raw generation sheets are local source art. Runtime-cleaned
+# textures under assets/ are versioned separately.
+/src/assets/original_sheets/

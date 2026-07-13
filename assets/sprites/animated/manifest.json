@@ -1,0 +1,252 @@
+{
+  "version": 1,
+  "coordinateSystem": "normalized-grid",
+  "comment": "Runtime art contract for the Pulse Court Win32/GDI viewer. The 'file' value is the path relative to the assets directory (sprites/animated/... for source sprite sheets, sprites/clean/... for runtime-cleaned player bodies, arena.png for the court background). Frame source rectangles are computed from the normalized sheet bounds with integer rounding; some generated source sheet dimensions are not evenly divisible by their grid count. The player idle sheets are cleaned by scripts/clean_idle_sprites.py; raw player move/strike/dash/ability/goal sheets remain source art and are not sampled for player bodies.",
+  "sheets": [
+    {
+      "file": "arena.png",
+      "columns": 1,
+      "rows": 1,
+      "frames": 1,
+      "convention": "Full-court background. Preserve aspect with centered crop/fit."
+    },
+    {
+      "file": "sprites/animated/ability_icons_3x1.png",
+      "columns": 3,
+      "rows": 1,
+      "frames": 3,
+      "convention": "Columns: Kite, Vale, Bastion."
+    },
+    {
+      "file": "sprites/animated/core_spin_4x2.png",
+      "columns": 4,
+      "rows": 2,
+      "frames": 8,
+      "convention": "Row-major order. Driven by GameState::tick."
+    },
+    {
+      "file": "sprites/animated/core_impact_3x2.png",
+      "columns": 3,
+      "rows": 2,
+      "frames": 6,
+      "convention": "Row-major order. Fired by StrikeHit and CoreBounce."
+    },
+    {
+      "file": "sprites/animated/strike_sweep_3x2.png",
+      "columns": 3,
+      "rows": 2,
+      "frames": 6,
+      "convention": "Row-major order. Aim-aligned with event direction on StrikeHit."
+    },
+    {
+      "file": "sprites/animated/dash_trail_3x2.png",
+      "columns": 3,
+      "rows": 2,
+      "frames": 6,
+      "convention": "Row-major order. Aim-aligned with event direction on DashStarted."
+    },
+    {
+      "file": "sprites/animated/jetstep_fx_6x3.png",
+      "columns": 6,
+      "rows": 3,
+      "frames": 18,
+      "convention": "Row 0 spawn, row 1 seamless loop, row 2 dissipate."
+    },
+    {
+      "file": "sprites/animated/anchor_well_fx_6x3.png",
+      "columns": 6,
+      "rows": 3,
+      "frames": 18,
+      "convention": "Row 0 spawn, row 1 seamless loop, row 2 dissipate."
+    },
+    {
+      "file": "sprites/animated/pulse_gate_fx_6x3.png",
+      "columns": 6,
+      "rows": 3,
+      "frames": 18,
+      "convention": "Row 0 spawn, row 1 seamless loop, row 2 dissipate."
+    },
+    {
+      "file": "sprites/animated/goal_burst_4x3.png",
+      "columns": 4,
+      "rows": 3,
+      "frames": 12,
+      "convention": "Row-major order. Fired by GoalScored."
+    },
+    {
+      "file": "sprites/animated/kickoff_pulse_4x2.png",
+      "columns": 4,
+      "rows": 2,
+      "frames": 8,
+      "convention": "Row-major order. Played at the core during Kickoff."
+    },
+    {
+      "file": "sprites/clean/kite_idle_4x4.png",
+      "columns": 4,
+      "rows": 4,
+      "frames": 16,
+      "convention": "Rows: north, east, south, west. Portrait use south row, frame 0."
+    },
+    {
+      "file": "sprites/animated/kite_move_loop_4x4.png",
+      "columns": 4,
+      "rows": 4,
+      "frames": 16,
+      "convention": "Rows: north, east, south, west."
+    },
+    {
+      "file": "sprites/animated/kite_move_transition_4x4.png",
+      "columns": 4,
+      "rows": 4,
+      "frames": 16,
+      "convention": "Rows: north, east, south, west. Columns 0-1 start, columns 2-3 stop."
+    },
+    {
+      "file": "sprites/animated/kite_strike_6x4.png",
+      "columns": 6,
+      "rows": 4,
+      "frames": 24,
+      "convention": "Rows: north, east, south, west."
+    },
+    {
+      "file": "sprites/animated/kite_dash_5x4.png",
+      "columns": 5,
+      "rows": 4,
+      "frames": 20,
+      "convention": "Rows: north, east, south, west."
+    },
+    {
+      "file": "sprites/animated/kite_ability_6x4.png",
+      "columns": 6,
+      "rows": 4,
+      "frames": 24,
+      "convention": "Rows: north, east, south, west."
+    },
+    {
+      "file": "sprites/animated/kite_goal_win_4x4.png",
+      "columns": 4,
+      "rows": 4,
+      "frames": 16,
+      "convention": "Rows: north, east, south, west."
+    },
+    {
+      "file": "sprites/animated/kite_goal_loss_4x4.png",
+      "columns": 4,
+      "rows": 4,
+      "frames": 16,
+      "convention": "Rows: north, east, south, west."
+    },
+    {
+      "file": "sprites/clean/vale_idle_4x4.png",
+      "columns": 4,
+      "rows": 4,
+      "frames": 16,
+      "convention": "Rows: north, east, south, west. Portrait use south row, frame 0."
+    },
+    {
+      "file": "sprites/animated/vale_move_loop_4x4.png",
+      "columns": 4,
+      "rows": 4,
+      "frames": 16,
+      "convention": "Rows: north, east, south, west."
+    },
+    {
+      "file": "sprites/animated/vale_move_transition_4x4.png",
+      "columns": 4,
+      "rows": 4,
+      "frames": 16,
+      "convention": "Rows: north, east, south, west. Columns 0-1 start, columns 2-3 stop."
+    },
+    {
+      "file": "sprites/animated/vale_strike_6x4.png",
+      "columns": 6,
+      "rows": 4,
+      "frames": 24,
+      "convention": "Rows: north, east, south, west."
+    },
+    {
+      "file": "sprites/animated/vale_dash_5x4.png",
+      "columns": 5,
+      "rows": 4,
+      "frames": 20,
+      "convention": "Rows: north, east, south, west."
+    },
+    {
+      "file": "sprites/animated/vale_ability_6x4.png",
+      "columns": 6,
+      "rows": 4,
+      "frames": 24,
+      "convention": "Rows: north, east, south, west."
+    },
+    {
+      "file": "sprites/animated/vale_goal_win_4x4.png",
+      "columns": 4,
+      "rows": 4,
+      "frames": 16,
+      "convention": "Rows: north, east, south, west."
+    },
+    {
+      "file": "sprites/animated/vale_goal_loss_4x4.png",
+      "columns": 4,
+      "rows": 4,
+      "frames": 16,
+      "convention": "Rows: north, east, south, west."
+    },
+    {
+      "file": "sprites/clean/bastion_idle_4x4.png",
+      "columns": 4,
+      "rows": 4,
+      "frames": 16,
+      "convention": "Rows: north, east, south, west. Portrait use south row, frame 0."
+    },
+    {
+      "file": "sprites/animated/bastion_move_loop_4x4.png",
+      "columns": 4,
+      "rows": 4,
+      "frames": 16,
+      "convention": "Rows: north, east, south, west."
+    },
+    {
+      "file": "sprites/animated/bastion_move_transition_4x4.png",
+      "columns": 4,
+      "rows": 4,
+      "frames": 16,
+      "convention": "Rows: north, east, south, west. Columns 0-1 start, columns 2-3 stop."
+    },
+    {
+      "file": "sprites/animated/bastion_strike_6x4.png",
+      "columns": 6,
+      "rows": 4,
+      "frames": 24,
+      "convention": "Rows: north, east, south, west."
+    },
+    {
+      "file": "sprites/animated/bastion_dash_5x4.png",
+      "columns": 5,
+      "rows": 4,
+      "frames": 20,
+      "convention": "Rows: north, east, south, west."
+    },
+    {
+      "file": "sprites/animated/bastion_ability_6x4.png",
+      "columns": 6,
+      "rows": 4,
+      "frames": 24,
+      "convention": "Rows: north, east, south, west."
+    },
+    {
+      "file": "sprites/animated/bastion_goal_win_4x4.png",
+      "columns": 4,
+      "rows": 4,
+      "frames": 16,
+      "convention": "Rows: north, east, south, west."
+    },
+    {
+      "file": "sprites/animated/bastion_goal_loss_4x4.png",
+      "columns": 4,
+      "rows": 4,
+      "frames": 16,
+      "convention": "Rows: north, east, south, west."
+    }
+  ]
+}

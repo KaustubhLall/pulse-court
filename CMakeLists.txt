@@ -26,11 +26,23 @@ add_executable(pulse_headless src/apps/headless_main.cpp)
 target_link_libraries(pulse_headless PRIVATE pulse_core)
 
 if(WIN32 AND PULSE_BUILD_VIEWER)
-    add_executable(pulse_viewer WIN32 src/apps/viewer_win32.cpp)
-    target_link_libraries(pulse_viewer PRIVATE pulse_core user32 gdi32)
+    add_executable(pulse_viewer WIN32
+        src/apps/viewer_win32.cpp
+        src/apps/viewer_assets.cpp
+        src/apps/viewer_monitor.cpp
+    )
+    target_link_libraries(pulse_viewer PRIVATE pulse_core user32 gdi32 gdiplus)
     if(MSVC)
         target_compile_options(pulse_viewer PRIVATE /W4 /permissive- /EHsc /Zc:__cplusplus)
     endif()
+
+    add_custom_command(TARGET pulse_viewer POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${CMAKE_SOURCE_DIR}/assets
+            $<TARGET_FILE_DIR:pulse_viewer>/assets
+        COMMENT "Copying assets next to viewer executable"
+        VERBATIM
+    )
 endif()
 
 include(CTest)

@@ -1,765 +1,501 @@
 #include "pulse_sim.hpp"
-
-#ifndef UNICODE
-#define UNICODE
-#endif
-#ifndef _UNICODE
-#define _UNICODE
-#endif
+#include "viewer_assets.hpp"
+#include "viewer_monitor.hpp"
 
 #include <windows.h>
 
+#include <chrono>
 #include <cmath>
 #include <cstdio>
-#include <cstdlib>
+#include <cstdint>
 #include <cstring>
-#include <sstream>
-#include <string>
-#include <vector>
 #include <deque>
+#include <string>
+#include <thread>
+#include <vector>
 
 namespace pulse {
 
 namespace {
-using std::fmod;
 
-// Global state
-static Simulation* g_sim = nullptr;
-static std::array<Character, 2> g_chars = {Character::Kite, Character::Vale};
-static bool g_reset_requested = false;
+constexpr int kClientWidth = 1300;
+constexpr int kClientHeight = 800;
+constexpr int kMinClientWidth = 1180;
+constexpr int kMinClientHeight = 780;
+constexpr int kSidebarWidth = 280;
+constexpr int kCardPadding = 8;
+constexpr int kCardSpacing = 16;
+constexpr int kFooterHeight = 52;
+constexpr int kCourtPadding = 16;
+constexpr double kSimHz = 120.0;
+constexpr double kSimDt = 1.0 / kSimHz;
+constexpr double kRenderDt = 1.0 / 60.0;
+constexpr double kMaxCatchUp = 0.1;
+constexpr std::size_t kFpsHistory = 30;
+constexpr std::size_t kMaxTraceEntries = 12;
+constexpr std::int32_t kBounceTraceCoalesceTicks = 2;
+const wchar_t kClassName[] = L"PulseCourtViewer";
+
+}  // namespace
+
+// Globals
+static HWND g_hwnd = nullptr;
 static bool g_quit_requested = false;
-static bool g_manual_pause = false;
 static bool g_has_focus = true;
+static bool g_manual_pause = false;
+static bool g_reset_requested = false;
 
-// Edge-triggered input state
 static bool g_key_state[256] = {};
 static bool g_key_pressed[256] = {};
 
-// Timing
-static LARGE_INTEGER g_perf_freq = {};
-static LARGE_INTEGER g_last_time = {};
-static double g_accumulated_time = 0.0;
+static Simulation* g_sim = nullptr;
+static AssetManager* g_assets = nullptr;
+static AnimationController g_anim;
+
+static std::array<Character, 2> g_chars = {Character::Kite, Character::Vale};
+static bool g_setup_mode = false;
+static bool g_start_match = false;
+static int g_active_player = 0;
+static bool g_mouse_clicked = false;
+static int g_mouse_x = 0;
+static int g_mouse_y = 0;
+
+static bool g_passive = false;
+static bool g_use_monitor_placement = false;
+static std::wstring g_monitor_name;
+static std::string g_monitor_name_narrow;
+
+static std::array<FrameInput, 2> g_input = {};
+static std::array<std::uint8_t, 2> g_pending_buttons = {};
+
+static int g_min_track_width = 0;
+static int g_min_track_height = 0;
+
+double g_accumulated_time = 0.0;
 static double g_render_accumulated_time = 0.0;
-static double g_last_render_time = 0.0;
-static constexpr double kSimDt = 1.0 / kSimHz;  // 120 Hz
-static constexpr double kRenderDt = 1.0 / 60.0;  // 60 FPS
-static constexpr double kMaxCatchUp = 0.1;  // Max 100ms catch-up
-
-// FPS tracking
 static std::deque<double> g_frame_times;
-static constexpr std::size_t kFpsHistory = 60;
-static bool g_first_frame_rendered = false;
 
-// Visual effects
-struct VisualEffect {
-    SimulationEventType type = SimulationEventType::None;
-    std::int8_t actor = -1;
-    EffectKind effect_kind = EffectKind::None;
-    Vec2 position{};
-    Vec2 direction{};
-    double age = 0.0;
-    double duration = 0.5;  // Default 500ms
-};
-
-static std::deque<VisualEffect> g_effects;
-static constexpr std::size_t kMaxEffects = 96;
-
-// Action trace
 struct TraceEntry {
-    std::uint32_t tick = 0;
-    std::int8_t actor = -1;
-    SimulationEventType type = SimulationEventType::None;
-    const char* description = "";
-    std::string reasoning;
+    std::int32_t tick;
+    char text[96];
+    COLORREF color;
 };
-
 static std::deque<TraceEntry> g_trace;
-static constexpr std::size_t kMaxTraceEntries = 8;
-static constexpr std::uint32_t kBounceTraceCoalesceTicks = kSimHz / 4;
 
-// Window constants
-const wchar_t kClassName[] = L"PulseCourtViewer";
-const int kClientWidth = 1440;
-const int kClientHeight = 840;
-
-// Layout constants
-const int kSidebarWidth = 400;
-const int kCardPadding = 12;
-const int kCardSpacing = 8;
-const int kFooterHeight = 40;
-const int kCourtPadding = 20;
-
-// Color palette
-const COLORREF kCourtBackground = RGB(15, 35, 25);
-const COLORREF kCourtLines = RGB(70, 100, 70);
-const COLORREF kGoalArea = RGB(35, 20, 20);
-const COLORREF kWallColor = RGB(220, 220, 220);
-const COLORREF kPlayer1Color = RGB(60, 100, 220);
-const COLORREF kPlayer2Color = RGB(220, 80, 60);
-const COLORREF kCoreColor = RGB(240, 240, 240);
-const COLORREF kPanelBackground = RGB(25, 30, 40);
-const COLORREF kPanelBorder = RGB(70, 80, 100);
-const COLORREF kTextMain = RGB(220, 220, 220);
-const COLORREF kTextDim = RGB(150, 150, 150);
-const COLORREF kCooldownBar = RGB(100, 150, 200);
-const COLORREF kCooldownEmpty = RGB(50, 60, 70);
-
-// Coordinate conversion
-int world_to_screen_x(std::int32_t world_x, int court_width) {
-    std::int64_t v = static_cast<std::int64_t>(world_x) * court_width / kFieldWidth;
-    return static_cast<int>(v);
+static std::string narrow_arg(const wchar_t* w) {
+    if (!w) return {};
+    int len = WideCharToMultiByte(CP_UTF8, 0, w, -1, nullptr, 0, nullptr,
+                                 nullptr);
+    if (len <= 0) return {};
+    std::string s;
+    s.resize(static_cast<std::size_t>(len));
+    WideCharToMultiByte(CP_UTF8, 0, w, -1, s.data(), len, nullptr, nullptr);
+    if (!s.empty() && s.back() == '\0') s.pop_back();
+    return s;
 }
 
-int world_to_screen_y(std::int32_t world_y, int court_height) {
-    std::int64_t v = static_cast<std::int64_t>(world_y) * court_height / kFieldHeight;
-    return court_height - static_cast<int>(v);
+static void clear_edge_triggers() {
+    std::memset(g_key_pressed, 0, sizeof(g_key_pressed));
 }
 
-int world_radius_to_screen(std::int32_t radius, int court_width) {
-    std::int64_t v = static_cast<std::int64_t>(radius) * court_width / kFieldWidth;
-    return static_cast<int>(v);
-}
-
-// Drawing primitives
-void draw_circle(HDC hdc, int x, int y, int r, COLORREF fill, COLORREF stroke) {
-    HBRUSH brush = CreateSolidBrush(fill);
-    HPEN pen = CreatePen(PS_SOLID, 2, stroke);
-    HBRUSH old_brush = static_cast<HBRUSH>(SelectObject(hdc, brush));
-    HPEN old_pen = static_cast<HPEN>(SelectObject(hdc, pen));
-    Ellipse(hdc, x - r, y - r, x + r, y + r);
-    SelectObject(hdc, old_brush);
-    SelectObject(hdc, old_pen);
-    DeleteObject(brush);
-    DeleteObject(pen);
-}
-
-void draw_hollow_circle(HDC hdc, int x, int y, int r, COLORREF stroke,
-                        int style = PS_SOLID, int width = 2) {
-    HPEN pen = CreatePen(style, width, stroke);
-    HPEN old_pen = static_cast<HPEN>(SelectObject(hdc, pen));
-    HBRUSH old_brush =
-        static_cast<HBRUSH>(SelectObject(hdc, GetStockObject(NULL_BRUSH)));
-    Ellipse(hdc, x - r, y - r, x + r, y + r);
-    SelectObject(hdc, old_pen);
-    SelectObject(hdc, old_brush);
-    DeleteObject(pen);
-}
-
-void draw_line(HDC hdc, int x1, int y1, int x2, int y2, COLORREF color,
-               int width = 2) {
-    HPEN pen = CreatePen(PS_SOLID, width, color);
-    HPEN old_pen = static_cast<HPEN>(SelectObject(hdc, pen));
-    MoveToEx(hdc, x1, y1, nullptr);
-    LineTo(hdc, x2, y2);
-    SelectObject(hdc, old_pen);
-    DeleteObject(pen);
-}
-
-void draw_rect(HDC hdc, RECT rc, COLORREF fill, COLORREF stroke = RGB(0, 0, 0)) {
-    HBRUSH brush = CreateSolidBrush(fill);
-    HPEN pen = CreatePen(PS_SOLID, 1, stroke);
-    HBRUSH old_brush = static_cast<HBRUSH>(SelectObject(hdc, brush));
-    HPEN old_pen = static_cast<HPEN>(SelectObject(hdc, pen));
-    Rectangle(hdc, rc.left, rc.top, rc.right, rc.bottom);
-    SelectObject(hdc, old_brush);
-    SelectObject(hdc, old_pen);
-    DeleteObject(brush);
-    DeleteObject(pen);
-}
-
-void draw_text(HDC hdc, int x, int y, const char* text, COLORREF color,
-               int height = 14, const char* font = "Consolas") {
-    SetBkMode(hdc, TRANSPARENT);
-    SetTextColor(hdc, color);
-    HFONT hfont = CreateFontA(height, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-                              DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
-                              CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY,
-                              DEFAULT_PITCH | FF_SWISS,
-                              font ? font : "Consolas");
-    HFONT old_font = static_cast<HFONT>(SelectObject(hdc, hfont));
-    TextOutA(hdc, x, y, text, static_cast<int>(strlen(text)));
-    SelectObject(hdc, old_font);
-    DeleteObject(hfont);
-}
-
-void draw_cooldown_bar(HDC hdc, int x, int y, int width, int height,
-                       std::int32_t current, std::int32_t max_val,
-                       const char* label) {
-    // Background
-    RECT bg = {x, y, x + width, y + height};
-    draw_rect(hdc, bg, kCooldownEmpty, kCooldownEmpty);
-
-    // Fill
-    if (max_val > 0) {
-        double ratio = 1.0 - static_cast<double>(current) / max_val;
-        int fill_width = static_cast<int>(width * ratio);
-        if (fill_width > 0) {
-            RECT fill = {x, y, x + fill_width, y + height};
-            draw_rect(hdc, fill, kCooldownBar, kCooldownBar);
-        }
-    }
-
-    // Label
-    char buf[64];
-    snprintf(buf, sizeof(buf), "%s: %d/%d", label, current, max_val);
-    draw_text(hdc, x, y + height + 2, buf, kTextDim, 12);
-}
-
-// Helper functions
-const char* phase_name(Phase p) {
-    switch (p) {
+const char* phase_name(Phase phase) {
+    switch (phase) {
         case Phase::Kickoff: return "Kickoff";
         case Phase::Live: return "Live";
-        case Phase::MatchOver: return "MatchOver";
+        case Phase::MatchOver: return "Match Over";
     }
-    return "?";
+    return "Unknown";
 }
 
 const char* event_type_name(SimulationEventType type) {
     switch (type) {
-        case SimulationEventType::StrikeStarted: return "Strike";
-        case SimulationEventType::StrikeHit: return "Strike Hit";
-        case SimulationEventType::DashStarted: return "Dash";
-        case SimulationEventType::AbilityActivated: return "Ability";
         case SimulationEventType::CoreBounce: return "Bounce";
-        case SimulationEventType::GoalScored: return "GOAL";
-        default: return "?";
+        case SimulationEventType::StrikeStarted: return "Strike";
+        case SimulationEventType::StrikeHit: return "Hit";
+        case SimulationEventType::AbilityActivated: return "Ability";
+        case SimulationEventType::DashStarted: return "Dash";
+        case SimulationEventType::GoalScored: return "Goal";
     }
+    return "Event";
 }
 
-const char* ability_name(EffectKind kind) {
+EffectKind effect_kind_for_character(Character character) {
+    switch (character) {
+        case Character::Kite: return EffectKind::Jetstep;
+        case Character::Vale: return EffectKind::AnchorWell;
+        case Character::Bastion: return EffectKind::PulseGate;
+    }
+    return EffectKind::None;
+}
+
+const char* effect_kind_name(EffectKind kind) {
     switch (kind) {
         case EffectKind::Jetstep: return "Jetstep";
         case EffectKind::AnchorWell: return "Anchor Well";
         case EffectKind::PulseGate: return "Pulse Gate";
-        default: return "None";
+        case EffectKind::None: return "None";
     }
+    return "Unknown";
 }
 
-const char* ability_description(Character character) {
-    switch (character) {
-        case Character::Kite: return "Jetstep: speed burst; next strike adds power";
-        case Character::Vale: return "Anchor Well: pulls nearby Core toward its center";
-        case Character::Bastion: return "Pulse Gate: core-only reflector placed ahead";
-        default: return "Unknown ability";
+const char* effect_kind_description(EffectKind kind) {
+    switch (kind) {
+        case EffectKind::Jetstep: return "Speed burst";
+        case EffectKind::AnchorWell: return "Deploy slow well";
+        case EffectKind::PulseGate: return "Deploy reflect gate";
+        case EffectKind::None: return "";
     }
+    return "";
 }
 
 const char* character_ability_name(Character character) {
-    switch (character) {
-        case Character::Kite: return "Jetstep";
-        case Character::Vale: return "Anchor Well";
-        case Character::Bastion: return "Pulse Gate";
-        default: return "None";
+    return effect_kind_name(effect_kind_for_character(character));
+}
+
+const char* actor_name(std::int8_t actor, const char* fallback = "World") {
+    if (actor < 0) return fallback;
+    if (actor < static_cast<std::int8_t>(g_sim->state().players.size())) {
+        return character_name(g_sim->state().players[actor].character);
+    }
+    return fallback;
+}
+
+static void add_trace_entry(std::int32_t tick, const char* text,
+                            COLORREF color = kTextDim) {
+    TraceEntry e;
+    e.tick = tick;
+    e.color = color;
+    snprintf(e.text, sizeof(e.text), "%s", text);
+    g_trace.push_back(e);
+    if (g_trace.size() > kMaxTraceEntries) {
+        g_trace.pop_front();
     }
 }
 
-const char* actor_name(std::int8_t actor) {
-    if (actor == -1) return "World";
-    if (actor == 0) return "P1";
-    if (actor == 1) return "P2";
-    return "?";
+static void poll_input() {
+    g_input[0].move_x = 0;
+    g_input[0].move_y = 0;
+    g_input[0].buttons = ButtonNone;
+    g_input[1].move_x = 0;
+    g_input[1].move_y = 0;
+    g_input[1].buttons = ButtonNone;
+
+    auto set_move = [](FrameInput& in, bool up, bool down, bool left, bool right) {
+        if (up) in.move_y += 1;
+        if (down) in.move_y -= 1;
+        if (left) in.move_x -= 1;
+        if (right) in.move_x += 1;
+        in.aim_x = in.move_x;
+        in.aim_y = in.move_y;
+    };
+
+    set_move(g_input[0], g_key_state['W'], g_key_state['S'], g_key_state['A'],
+             g_key_state['D']);
+    set_move(g_input[1], g_key_state['I'], g_key_state['K'], g_key_state['J'],
+             g_key_state['L']);
+
+    if (g_key_pressed['F']) g_pending_buttons[0] |= ButtonStrike;
+    if (g_key_pressed['G']) g_pending_buttons[0] |= ButtonAbility;
+    if (g_key_pressed['H']) g_pending_buttons[0] |= ButtonDash;
+    if (g_key_pressed['U']) g_pending_buttons[1] |= ButtonStrike;
+    if (g_key_pressed['O']) g_pending_buttons[1] |= ButtonAbility;
+    if (g_key_pressed['P']) g_pending_buttons[1] |= ButtonDash;
+
+    if (g_key_pressed['R']) g_reset_requested = true;
+    if (g_key_pressed[VK_SPACE]) {
+        g_manual_pause = !g_manual_pause;
+        g_key_pressed[VK_SPACE] = false;
+    }
+    if (g_key_pressed[VK_ESCAPE]) g_quit_requested = true;
+
+    clear_edge_triggers();
 }
 
-// Input handling
-void clear_edge_triggers() {
-    memset(g_key_pressed, 0, sizeof(g_key_pressed));
-}
+static void render_sidebar(HDC hdc, int x, int y, int w, int h, int fps) {
+    RECT panel = {x, y, x + w, y + h};
+    draw_rect(hdc, panel, kPanelBackground, kPanelBorder);
 
-FrameInput poll_left_input() {
-    FrameInput in;
-    int mx = 0;
-    int my = 0;
-
-    // Movement (held)
-    if (g_key_state[0x41]) mx -= 1;  // A
-    if (g_key_state[0x44]) mx += 1;  // D
-    if (g_key_state[0x57]) my += 1;  // W
-    if (g_key_state[0x53]) my -= 1;  // S
-
-    in.move_x = static_cast<std::int8_t>(mx);
-    in.move_y = static_cast<std::int8_t>(my);
-    in.aim_x = in.move_x;
-    in.aim_y = in.move_y;
-
-    // Edge-triggered actions
-    if (g_key_pressed[0x46]) in.buttons |= ButtonStrike;   // F
-    if (g_key_pressed[0x47]) in.buttons |= ButtonAbility;  // G
-    if (g_key_pressed[0x48]) in.buttons |= ButtonDash;     // H
-
-    return in;
-}
-
-FrameInput poll_right_input() {
-    FrameInput in;
-    int mx = 0;
-    int my = 0;
-
-    // Movement (held) - I/J/K/L layout
-    if (g_key_state[0x4A]) mx -= 1;  // J (left)
-    if (g_key_state[0x4C]) mx += 1;  // L (right)
-    if (g_key_state[0x49]) my += 1;  // I (up)
-    if (g_key_state[0x4B]) my -= 1;  // K (down)
-
-    in.move_x = static_cast<std::int8_t>(mx);
-    in.move_y = static_cast<std::int8_t>(my);
-    in.aim_x = in.move_x;
-    in.aim_y = in.move_y;
-
-    // Edge-triggered actions
-    if (g_key_pressed[0x55]) in.buttons |= ButtonStrike;   // U
-    if (g_key_pressed[0x4F]) in.buttons |= ButtonAbility;  // O
-    if (g_key_pressed[0x50]) in.buttons |= ButtonDash;     // P
-
-    return in;
-}
-
-// Effect management
-void add_effect(const SimulationEvent& event) {
-    if (g_effects.size() >= kMaxEffects) {
-        g_effects.pop_front();
-    }
-
-    VisualEffect ve;
-    ve.type = event.type;
-    ve.actor = event.actor;
-    ve.effect_kind = event.effect_kind;
-    ve.position = event.position;
-    ve.direction = event.direction;
-    ve.age = 0.0;
-
-    // Set duration based on type
-    switch (event.type) {
-        case SimulationEventType::StrikeStarted:
-            ve.duration = 0.2;
-            break;
-        case SimulationEventType::StrikeHit:
-            ve.duration = 0.15;
-            break;
-        case SimulationEventType::DashStarted:
-            ve.duration = 0.25;
-            break;
-        case SimulationEventType::AbilityActivated:
-            ve.duration = 0.4;
-            break;
-        case SimulationEventType::CoreBounce:
-            ve.duration = 0.1;
-            break;
-        case SimulationEventType::GoalScored:
-            ve.duration = 0.5;
-            break;
-        default:
-            ve.duration = 0.3;
-    }
-
-    g_effects.push_back(ve);
-}
-
-void update_effects(double dt) {
-    for (auto& ve : g_effects) {
-        ve.age += dt;
-    }
-
-    // Remove expired effects
-    while (!g_effects.empty() && g_effects.front().age >= g_effects.front().duration) {
-        g_effects.pop_front();
-    }
-}
-
-void add_trace_entry(const StepEvents& events) {
-    for (std::uint8_t i = 0; i < events.count; ++i) {
-        const auto& ev = events.events[i];
-
-        // World-wall contacts can occur in rapid succession. Keep one
-        // up-to-date row for that background telemetry so player actions do
-        // not immediately disappear from the inspection trace.
-        if (ev.type == SimulationEventType::CoreBounce && ev.actor == -1 &&
-            !g_trace.empty()) {
-            TraceEntry& last = g_trace.back();
-            if (last.type == SimulationEventType::CoreBounce &&
-                last.actor == -1 &&
-                events.tick - last.tick < kBounceTraceCoalesceTicks) {
-                last.tick = events.tick;
-                continue;
-            }
-        }
-
-        if (g_trace.size() >= kMaxTraceEntries) {
-            g_trace.pop_front();
-        }
-
-        TraceEntry te;
-        te.tick = events.tick;
-        te.actor = ev.actor;
-        te.type = ev.type;
-        te.description = event_type_name(ev.type);
-
-        g_trace.push_back(te);
-    }
-}
-
-// Rendering
-void render_court(HDC hdc, int court_x, int court_y, int court_width, int court_height) {
-    const GameState& s = g_sim->state();
-
-    // Court background
-    RECT court_rc = {court_x, court_y, court_x + court_width, court_y + court_height};
-    draw_rect(hdc, court_rc, kCourtBackground, kCourtBackground);
-
-    // Center line
-    int cx = court_x + court_width / 2;
-    int cy = court_y + court_height / 2;
-    draw_line(hdc, cx, court_y, cx, court_y + court_height, kCourtLines, 2);
-    draw_line(hdc, court_x, cy, court_x + court_width, cy, kCourtLines, 1);
-
-    // Goals - shallow zones at left/right short sides (about 2 world units deep)
-    int goal_depth_screen = world_to_screen_x(2 * kFixedScale, court_width);
-    int goal_top = court_y + world_to_screen_y(kGoalBottom, court_height);
-    int goal_bottom = court_y + world_to_screen_y(kGoalTop, court_height);
-    RECT left_goal = {court_x, goal_top, court_x + goal_depth_screen, goal_bottom};
-    draw_rect(hdc, left_goal, kGoalArea, kGoalArea);
-
-    int court_right = court_x + court_width;
-    RECT right_goal = {court_right - goal_depth_screen, goal_top, court_right, goal_bottom};
-    draw_rect(hdc, right_goal, kGoalArea, kGoalArea);
-
-    // Walls
-    int r_screen = world_radius_to_screen(kCoreRadius, court_width);
-    int wall_top = court_y + world_to_screen_y(kFieldHeight, court_height) - r_screen;
-    int wall_bottom = court_y + world_to_screen_y(0, court_height) + r_screen;
-    int left_wall = court_x + world_to_screen_x(0, court_width) + r_screen;
-    int right_wall = court_x + world_to_screen_x(kFieldWidth, court_width) - r_screen;
-
-    draw_line(hdc, court_x, wall_top, court_x + court_width, wall_top, kWallColor, 3);
-    draw_line(hdc, court_x, wall_bottom, court_x + court_width, wall_bottom, kWallColor, 3);
-    draw_line(hdc, left_wall, court_y, left_wall, goal_top, kWallColor, 3);
-    draw_line(hdc, left_wall, goal_bottom, left_wall, court_y + court_height, kWallColor, 3);
-    draw_line(hdc, right_wall, court_y, right_wall, goal_top, kWallColor, 3);
-    draw_line(hdc, right_wall, goal_bottom, right_wall, court_y + court_height, kWallColor, 3);
-
-    // Draw persistent effects from game state
-    for (const auto& p : s.players) {
-        if (p.effect_ticks == 0) continue;
-
-        int ex = court_x + world_to_screen_x(p.effect_position.x, court_width);
-        int ey = court_y + world_to_screen_y(p.effect_position.y, court_height);
-
-        if (p.effect_kind == EffectKind::AnchorWell) {
-            int er = world_radius_to_screen(kAnchorRadius, court_width);
-            // Animated concentric rings
-            double anim = (p.effect_ticks % 20) / 20.0;
-            draw_hollow_circle(hdc, ex, ey, er, RGB(0, 200, 200), PS_DOT, 2);
-            draw_hollow_circle(hdc, ex, ey, static_cast<int>(er * (0.5 + 0.5 * anim)),
-                              RGB(0, 150, 180), PS_SOLID, 1);
-        } else if (p.effect_kind == EffectKind::PulseGate) {
-            int er = world_radius_to_screen(kGateRadius, court_width);
-            // Pulsing hexagon-like effect
-            double pulse = (p.effect_ticks % 15) / 15.0;
-            int pulse_r = static_cast<int>(er * (0.8 + 0.4 * pulse));
-            draw_hollow_circle(hdc, ex, ey, pulse_r, RGB(255, 180, 0), PS_SOLID, 3);
-            draw_hollow_circle(hdc, ex, ey, static_cast<int>(er * 0.6), RGB(255, 150, 0), PS_DOT, 1);
-        } else if (p.effect_kind == EffectKind::Jetstep) {
-            int px = court_x + world_to_screen_x(p.position.x, court_width);
-            int py = court_y + world_to_screen_y(p.position.y, court_height);
-            int pr = world_radius_to_screen(kPlayerRadius, court_width) + 8;
-            // Cyan pulse ring
-            draw_hollow_circle(hdc, px, py, pr, RGB(0, 200, 255), PS_DOT, 2);
-            // Trailing afterimage effect
-            double trail = (p.effect_ticks % 10) / 10.0;
-            draw_hollow_circle(hdc, px, py, static_cast<int>(pr * (1.0 + 0.5 * trail)),
-                              RGB(0, 150, 200), PS_SOLID, 1);
-        }
-    }
-
-    // Draw transient visual effects
-    for (const auto& ve : g_effects) {
-        double life = ve.age / ve.duration;
-        if (life >= 1.0) continue;
-
-        int ex = court_x + world_to_screen_x(ve.position.x, court_width);
-        int ey = court_y + world_to_screen_y(ve.position.y, court_height);
-        double alpha = 1.0 - life;
-
-        switch (ve.type) {
-            case SimulationEventType::StrikeStarted: {
-                // Directional wedge/arc
-                int arc_r = world_radius_to_screen(kStrikeReach, court_width);
-                COLORREF arc_color = RGB(255, 255, 100);
-                draw_hollow_circle(hdc, ex, ey, static_cast<int>(arc_r * alpha),
-                                  arc_color, PS_SOLID, 2);
-                // Direction indicator
-                if (ve.direction.x != 0 || ve.direction.y != 0) {
-                    int dx = ex + (ve.direction.x * arc_r) / kFixedScale;
-                    int dy = ey - (ve.direction.y * arc_r) / kFixedScale;
-                    draw_line(hdc, ex, ey, dx, dy, arc_color, 2);
-                }
-                break;
-            }
-            case SimulationEventType::StrikeHit: {
-                // Core starburst
-                int burst_r = world_radius_to_screen(kCoreRadius, court_width) * 3;
-                COLORREF burst_color = RGB(255, 200, 50);
-                draw_hollow_circle(hdc, ex, ey, static_cast<int>(burst_r * alpha),
-                                  burst_color, PS_SOLID, 2);
-                draw_hollow_circle(hdc, ex, ey, static_cast<int>(burst_r * 0.5 * alpha),
-                                  burst_color, PS_DOT, 1);
-                break;
-            }
-            case SimulationEventType::DashStarted: {
-                // Directional afterimage streak
-                int streak_len = world_radius_to_screen(kDashSpeed * 3, court_width);
-                COLORREF streak_color = (ve.actor == 0) ? RGB(100, 150, 255) : RGB(255, 150, 100);
-                if (ve.direction.x != 0 || ve.direction.y != 0) {
-                    int dx = ex - (ve.direction.x * streak_len) / kFixedScale;
-                    int dy = ey + (ve.direction.y * streak_len) / kFixedScale;
-                    draw_line(hdc, ex, ey, dx, dy, streak_color, 3);
-                }
-                draw_hollow_circle(hdc, ex, ey, world_radius_to_screen(kPlayerRadius, court_width),
-                                  streak_color, PS_DOT, 2);
-                break;
-            }
-            case SimulationEventType::AbilityActivated: {
-                // Ability-specific visual
-                COLORREF ability_color = RGB(0, 255, 200);
-                if (ve.effect_kind == EffectKind::Jetstep) {
-                    ability_color = RGB(0, 200, 255);
-                } else if (ve.effect_kind == EffectKind::AnchorWell) {
-                    ability_color = RGB(0, 200, 200);
-                } else if (ve.effect_kind == EffectKind::PulseGate) {
-                    ability_color = RGB(255, 180, 0);
-                }
-                int effect_r = world_radius_to_screen(kAnchorRadius, court_width);
-                draw_hollow_circle(hdc, ex, ey, static_cast<int>(effect_r * alpha),
-                                  ability_color, PS_SOLID, 2);
-                break;
-            }
-            case SimulationEventType::CoreBounce: {
-                // Radial impact sparks
-                int spark_r = world_radius_to_screen(kCoreRadius, court_width) * 2;
-                COLORREF spark_color = RGB(255, 255, 200);
-                draw_hollow_circle(hdc, ex, ey, static_cast<int>(spark_r * alpha),
-                                  spark_color, PS_DOT, 2);
-                break;
-            }
-            case SimulationEventType::GoalScored: {
-                // Goal-side flash
-                COLORREF goal_color = (ve.actor == 0) ? RGB(100, 200, 100) : RGB(200, 100, 100);
-                int flash_r = court_width / 4;
-                draw_hollow_circle(hdc, ex, ey, static_cast<int>(flash_r * alpha),
-                                  goal_color, PS_SOLID, 4);
-                break;
-            }
-            default:
-                break;
-        }
-    }
-
-    // Core
-    int core_x = court_x + world_to_screen_x(s.core.position.x, court_width);
-    int core_y = court_y + world_to_screen_y(s.core.position.y, court_height);
-    int core_r = world_radius_to_screen(kCoreRadius, court_width);
-    draw_circle(hdc, core_x, core_y, core_r, kCoreColor, RGB(200, 200, 200));
-
-    // Players
-    for (std::size_t i = 0; i < s.players.size(); ++i) {
-        const auto& p = s.players[i];
-        int px = court_x + world_to_screen_x(p.position.x, court_width);
-        int py = court_y + world_to_screen_y(p.position.y, court_height);
-        int pr = world_radius_to_screen(kPlayerRadius, court_width);
-        COLORREF fill = (i == 0) ? kPlayer1Color : kPlayer2Color;
-        draw_circle(hdc, px, py, pr, fill, RGB(240, 240, 240));
-
-        // Facing indicator
-        int fx = px + (p.facing.x * pr) / kFixedScale;
-        int fy = py - (p.facing.y * pr) / kFixedScale;
-        draw_line(hdc, px, py, fx, fy, RGB(255, 255, 0), 2);
-    }
-}
-
-void render_sidebar(HDC hdc, int sidebar_x, int sidebar_y, int sidebar_width, int /*sidebar_height*/) {
-    const GameState& s = g_sim->state();
-    int y = sidebar_y + kCardPadding;
-
-    // Match card
-    RECT match_card = {sidebar_x + kCardPadding, y,
-                       sidebar_x + sidebar_width - kCardPadding, y + 140};
-    draw_rect(hdc, match_card, kPanelBackground, kPanelBorder);
-    y += kCardPadding;
-
-    draw_text(hdc, match_card.left + kCardPadding, y, "MATCH STATUS", kTextMain, 16);
-    y += 20;
-
-    char score_buf[64];
-    snprintf(score_buf, sizeof(score_buf), "Score: %d - %d", s.score[0], s.score[1]);
-    draw_text(hdc, match_card.left + kCardPadding, y, score_buf, kTextMain, 14);
-    y += 18;
-
-    char phase_buf[64];
-    snprintf(phase_buf, sizeof(phase_buf), "Phase: %s", phase_name(s.phase));
-    draw_text(hdc, match_card.left + kCardPadding, y, phase_buf, kTextDim, 12);
-    y += 16;
-
-    char tick_buf[64];
-    snprintf(tick_buf, sizeof(tick_buf), "Tick: %u", s.tick);
-    draw_text(hdc, match_card.left + kCardPadding, y, tick_buf, kTextDim, 12);
-    y += 16;
-
-    // Clock info
-    char clock_buf[128];
-    snprintf(clock_buf, sizeof(clock_buf), "SIM 120 Hz / VIEW 60 FPS");
-    draw_text(hdc, match_card.left + kCardPadding, y, clock_buf, kTextDim, 12);
-    y += 16;
-
-    // Policy cadence status
-    if (is_decision_tick(s.tick)) {
-        draw_text(hdc, match_card.left + kCardPadding, y, "POLICY: boundary now", RGB(0, 200, 200), 12);
-    } else {
-        std::int32_t ticks_until_decision = kDecisionIntervalTicks - (s.tick % kDecisionIntervalTicks);
-        char policy_buf[64];
-        snprintf(policy_buf, sizeof(policy_buf), "POLICY: %d ticks until refresh", ticks_until_decision);
-        draw_text(hdc, match_card.left + kCardPadding, y, policy_buf, kTextDim, 12);
-    }
-    y += 16;
-
-    // Pause status
-    const char* pause_status = "Running";
-    if (!g_has_focus) pause_status = "Unfocused (paused)";
-    else if (g_manual_pause) pause_status = "Manual pause";
-    draw_text(hdc, match_card.left + kCardPadding, y, pause_status, RGB(255, 200, 100), 12);
-
-    y = match_card.bottom + kCardSpacing;
-
-    // Player cards
-    for (std::size_t i = 0; i < s.players.size(); ++i) {
-        const auto& p = s.players[i];
-        RECT player_card = {sidebar_x + kCardPadding, y,
-                           sidebar_x + sidebar_width - kCardPadding, y + 184};
-        COLORREF card_color = (i == 0) ? RGB(40, 50, 70) : RGB(70, 40, 40);
-        draw_rect(hdc, player_card, card_color, kPanelBorder);
-        y += kCardPadding;
-
-        const char* player_label = (i == 0) ? "PLAYER 1 (Blue)" : "PLAYER 2 (Orange)";
-        draw_text(hdc, player_card.left + kCardPadding, y, player_label, kTextMain, 14);
-        y += 18;
-
-        char char_buf[64];
-        snprintf(char_buf, sizeof(char_buf), "Character: %s", character_name(p.character));
-        draw_text(hdc, player_card.left + kCardPadding, y, char_buf, kTextDim, 12);
-        y += 16;
-
-        // Controls
-        const char* controls = (i == 0) ? "Controls: WASD move, F Strike, G Ability, H Dash"
-                                        : "Controls: IJKL move, U Strike, O Ability, P Dash";
-        draw_text(hdc, player_card.left + kCardPadding, y, controls, kTextDim, 11);
-        y += 16;
-
-        // Always show ability info
-        const char* abil_name = character_ability_name(p.character);
-        const char* abil_desc = ability_description(p.character);
-        draw_text(hdc, player_card.left + kCardPadding, y, abil_name, RGB(0, 200, 200), 12);
-        y += 14;
-        draw_text(hdc, player_card.left + kCardPadding, y, abil_desc, kTextDim, 11);
-        y += 16;
-
-        // Active status
-        if (p.effect_kind != EffectKind::None) {
-            char status_buf[64];
-            snprintf(status_buf, sizeof(status_buf), "Status: Active (%d ticks)", p.effect_ticks);
-            draw_text(hdc, player_card.left + kCardPadding, y, status_buf, RGB(0, 255, 150), 11);
-        } else if (p.ability_cooldown == 0) {
-            draw_text(hdc, player_card.left + kCardPadding, y, "Status: Ready", RGB(0, 255, 150), 11);
-        } else {
-            char cd_buf[64];
-            snprintf(cd_buf, sizeof(cd_buf), "Status: Cooldown (%d)", p.ability_cooldown);
-            draw_text(hdc, player_card.left + kCardPadding, y, cd_buf, kTextDim, 11);
-        }
-        y += 16;
-
-        // Cooldown bars
-        int bar_x = player_card.left + kCardPadding;
-        int bar_y = y;
-        int bar_w = 120;
-        int bar_h = 10;
-
-        draw_cooldown_bar(hdc, bar_x, bar_y, bar_w, bar_h, p.strike_cooldown, kStrikeCooldown, "Strike");
-        bar_y += 24;
-        draw_cooldown_bar(hdc, bar_x, bar_y, bar_w, bar_h, p.dash_cooldown, kDashCooldown, "Dash");
-        bar_y += 24;
-        draw_cooldown_bar(hdc, bar_x, bar_y, bar_w, bar_h, p.ability_cooldown, kAbilityCooldown, "Ability");
-
-        y = player_card.bottom + kCardSpacing;
-    }
-
-    // Action Trace card
-    RECT trace_card = {sidebar_x + kCardPadding, y,
-                      sidebar_x + sidebar_width - kCardPadding, y + 160};
-    draw_rect(hdc, trace_card, kPanelBackground, kPanelBorder);
-    y += kCardPadding;
-
-    draw_text(hdc, trace_card.left + kCardPadding, y, "ACTION TRACE", kTextMain, 14);
-    y += 20;
-
-    if (g_trace.empty()) {
-        draw_text(hdc, trace_card.left + kCardPadding, y, "No events yet", kTextDim, 12);
-    } else {
-        for (const auto& entry : g_trace) {
-            char trace_buf[128];
-            snprintf(trace_buf, sizeof(trace_buf), "T%u %s %s",
-                    entry.tick, actor_name(entry.actor), entry.description);
-            draw_text(hdc, trace_card.left + kCardPadding, y, trace_buf, kTextDim, 11);
-            y += 14;
-            if (!entry.reasoning.empty()) {
-                draw_text(hdc, trace_card.left + kCardPadding + 10, y, entry.reasoning.c_str(), RGB(150, 150, 100), 10);
-                y += 12;
-            }
-        }
-    }
-
-    y = trace_card.bottom + kCardSpacing;
-
-    // Policy Inspector card
-    RECT policy_card = {sidebar_x + kCardPadding, y,
-                       sidebar_x + sidebar_width - kCardPadding, y + 100};
-    draw_rect(hdc, policy_card, kPanelBackground, kPanelBorder);
-    y += kCardPadding;
-
-    draw_text(hdc, policy_card.left + kCardPadding, y, "POLICY INSPECTOR", kTextMain, 14);
-    y += 20;
-
-    draw_text(hdc, policy_card.left + kCardPadding, y, "Input Source: Keyboard", kTextDim, 12);
-    y += 16;
-
-    // Show latest action if available
-    if (!g_trace.empty()) {
-        const auto& latest = g_trace.back();
-        char action_buf[64];
-        snprintf(action_buf, sizeof(action_buf), "Latest Action: %s", latest.description);
-        draw_text(hdc, policy_card.left + kCardPadding, y, action_buf, kTextDim, 12);
-        y += 16;
-    }
-
-    // Show reasoning or static reserved message
-    if (!g_trace.empty() && !g_trace.back().reasoning.empty()) {
-        draw_text(hdc, policy_card.left + kCardPadding, y, g_trace.back().reasoning.c_str(), RGB(150, 150, 100), 11);
-    } else {
-        draw_text(hdc, policy_card.left + kCardPadding, y, "Reasoning: reserved for policy adapter",
-                  RGB(150, 150, 100), 11);
-    }
-}
-
-void render_footer(HDC hdc, int court_x, int court_y, int court_height) {
-    const char* footer = "R reset | Space pause | Esc quit | Aim follows movement/last facing";
-    int footer_y = court_y + court_height + 8;
-    draw_text(hdc, court_x, footer_y, footer, kTextDim, 12);
-}
-
-void render(HWND hwnd) {
     if (!g_sim) return;
+    const GameState& s = g_sim->state();
 
+    char buf[128];
+    int yy = y + 10;
+    draw_text(hdc, x + 12, yy, "Pulse Court", kTextMain, 18);
+    yy += 24;
+
+    int match_h = 64;
+    RECT match_card = {x + 12, yy, x + w - 12, yy + match_h};
+    draw_rect(hdc, match_card, kPanelBackground, kPanelBorder);
+    snprintf(buf, sizeof(buf), "Match Status");
+    draw_text(hdc, x + 18, yy + 6, buf, kTextMain, 14);
+    snprintf(buf, sizeof(buf), "Phase: %s | Tick: %d  Score: %d - %d",
+             phase_name(s.phase), s.tick, s.score[0], s.score[1]);
+    draw_text(hdc, x + 18, yy + 22, buf, kTextDim, 12);
+    snprintf(buf, sizeof(buf), "Sim: 120 Hz | Display: %d FPS", fps);
+    draw_text(hdc, x + 18, yy + 36, buf, kTextDim, 12);
+    int next = static_cast<int>(((s.tick / kDecisionIntervalTicks) + 1) *
+                                kDecisionIntervalTicks);
+    int until = next - static_cast<int>(s.tick);
+    snprintf(buf, sizeof(buf),
+             "Policy: 10 Hz | Next boundary: t%d (%d ticks)", next, until);
+    draw_text(hdc, x + 18, yy + 50, buf, kTextDim, 12);
+    yy += match_h + kCardSpacing;
+
+    for (std::size_t i = 0; i < s.players.size(); ++i) {
+        const PlayerState& p = s.players[i];
+        COLORREF card_fill = (i == 0) ? kPlayer1CardFill : kPlayer2CardFill;
+        COLORREF card_border = (i == 0) ? kPlayer1Color : kPlayer2Color;
+        int card_h = 108;
+        int card_x = x + 12;
+        int card_y = yy;
+        int card_w = w - 24;
+        RECT card = {card_x, card_y, card_x + card_w, card_y + card_h};
+        draw_rect(hdc, card, card_fill, card_border);
+
+        snprintf(buf, sizeof(buf), "%s P%d", character_name(p.character),
+                 static_cast<int>(i + 1));
+        draw_text(hdc, card_x + 8, card_y + 8, buf, kTextMain, 14);
+
+        const char* ability = character_ability_name(p.character);
+        snprintf(buf, sizeof(buf), "%s - %s", ability,
+                 effect_kind_description(effect_kind_for_character(p.character)));
+        draw_text(hdc, card_x + 8, card_y + 24, buf, kTextDim, 12);
+
+        if (g_assets) {
+            (void)g_assets->draw_sprite(hdc, SheetId::AbilityIcons,
+                                        static_cast<int>(p.character),
+                                        card_x + card_w - 20, card_y + 20, 24,
+                                        24, 0.0f, 1.0f);
+        }
+
+        draw_cooldown_bar(hdc, card_x + 8, card_y + 40, card_w - 16, 10,
+                          p.strike_cooldown, kStrikeCooldown, "Strike");
+        draw_cooldown_bar(hdc, card_x + 8, card_y + 62, card_w - 16, 10,
+                          p.ability_cooldown, kAbilityCooldown, "Ability");
+        draw_cooldown_bar(hdc, card_x + 8, card_y + 84, card_w - 16, 10,
+                          p.dash_cooldown, kDashCooldown, "Dash");
+
+        yy += card_h + kCardSpacing;
+    }
+
+    draw_text(hdc, x + 12, yy, "Action Trace", kTextMain, 14);
+    yy += 14;
+    int trace_y = yy;
+    for (const auto& e : g_trace) {
+        draw_text(hdc, x + 12, yy, e.text, e.color, 12);
+        yy += 14;
+    }
+    yy = trace_y + static_cast<int>(kMaxTraceEntries * 14);
+    yy += kCardSpacing;
+
+    draw_text(hdc, x + 12, yy, "Controls", kTextMain, 14);
+    yy += 14;
+    draw_text(hdc, x + 12, yy, "WASD / IJKL move", kTextDim, 12);
+    yy += 14;
+    draw_text(hdc, x + 12, yy, "F/U Strike  G/O Ability  H/P Dash", kTextDim, 12);
+    yy += 14;
+    draw_text(hdc, x + 12, yy, "R Reset  Space Pause  Esc Quit", kTextDim, 12);
+    yy += 14;
+
+    int policy_h = h - (yy - y) - 10;
+    if (policy_h > 0) {
+        RECT policy = {x + 12, yy, x + w - 12, yy + policy_h};
+        draw_rect(hdc, policy, kPanelBackground, kPanelBorder);
+        draw_text(hdc, x + 18, yy + 8, "Policy Inspector", kTextMain, 14);
+        draw_text(hdc, x + 18, yy + 28,
+                  "Reserved for policy reasoning and decision boundary data.",
+                  kTextDim, 12);
+        draw_text(hdc, x + 18, yy + 46,
+                  "No reasoning output is currently displayed.", kTextDim, 12);
+    }
+}
+
+static void render_footer(HDC hdc, int x, int y) {
+    char buf[128];
+    if (g_sim) {
+        const GameState& s = g_sim->state();
+        snprintf(buf, sizeof(buf),
+                 "P1: %s    P2: %s    Last Touch: %s    Regulation: %d",
+                 character_name(s.players[0].character),
+                 character_name(s.players[1].character),
+                 s.last_touch == 0 ? "P1" : s.last_touch == 1 ? "P2" : "None",
+                 s.regulation_remaining);
+    } else {
+        buf[0] = '\0';
+    }
+    draw_text(hdc, x, y, buf, kTextDim, 12);
+    if (g_assets && !g_assets->fallback_status().empty()) {
+        draw_text(hdc, x, y + 16, g_assets->fallback_status().c_str(), kTextDim,
+                  12);
+    }
+
+    if (g_passive || g_use_monitor_placement) {
+        char status[128] = {};
+        if (g_passive && g_use_monitor_placement) {
+            snprintf(status, sizeof(status), "PASSIVE | %s",
+                     g_monitor_name_narrow.c_str());
+        } else if (g_passive) {
+            snprintf(status, sizeof(status), "PASSIVE");
+        } else {
+            snprintf(status, sizeof(status), "MONITOR: %s",
+                     g_monitor_name_narrow.c_str());
+        }
+        draw_text(hdc, x, y + 32, status, kTextDim, 12);
+    }
+}
+
+static void render_setup(HDC hdc, int w, int h) {
+    RECT bg = {0, 0, w, h};
+    draw_rect(hdc, bg, kPanelBackground, kPanelBackground);
+
+    draw_text(hdc, w / 2 - 70, 20, "Pulse Court - Character Selection",
+              kTextMain, 18);
+
+    const char* hero_names[3] = {"Kite", "Vale", "Bastion"};
+    Character hero_chars[3] = {Character::Kite, Character::Vale, Character::Bastion};
+    SheetId hero_idle_sheets[3] = {SheetId::KiteIdle, SheetId::ValeIdle,
+                                   SheetId::BastionIdle};
+
+    int card_w = 160;
+    int card_h = 220;
+    int cols = 3;
+    int total_width = cols * card_w + (cols - 1) * kCardSpacing;
+    int start_x = (w - total_width) / 2;
+    int start_y = 80;
+    int row_gap = 40;
+
+    for (int player = 0; player < 2; ++player) {
+        const char* label = (player == 0) ? "Player 1" : "Player 2";
+        int label_y = start_y + player * (card_h + row_gap) - 24;
+        draw_text(hdc, start_x, label_y, label, kTextMain, 14);
+
+        for (int i = 0; i < 3; ++i) {
+            int cx = start_x + i * (card_w + kCardSpacing);
+            int cy = start_y + player * (card_h + row_gap);
+            RECT card = {cx, cy, cx + card_w, cy + card_h};
+
+            COLORREF border = kPanelBorder;
+            COLORREF fill = kPanelBackground;
+            bool selected = (g_chars[player] == hero_chars[i]);
+            bool active = (g_active_player == player);
+
+            if (selected) {
+                fill = (player == 0) ? RGB(30, 50, 90) : RGB(90, 40, 30);
+                border = (player == 0) ? kPlayer1Color : kPlayer2Color;
+            }
+            if (active && selected) {
+                border = RGB(255, 255, 0);
+            }
+
+            draw_rect(hdc, card, fill, border);
+
+            int portrait_size = 80;
+            int px = cx + card_w / 2;
+            int py = cy + 80;
+            if (!g_assets || !g_assets->draw_sprite(hdc, hero_idle_sheets[i], 8, px, py,
+                                                    portrait_size, portrait_size,
+                                                    0.0f, 1.0f)) {
+                draw_circle(hdc, px, py, portrait_size / 2,
+                            (i == 0) ? kPlayer1Color : (i == 1) ? kTextDim : kPlayer2Color,
+                            RGB(240, 240, 240));
+            }
+
+            if (g_assets) {
+                (void)g_assets->draw_sprite(hdc, SheetId::AbilityIcons, i,
+                                            cx + card_w - 24, cy + 24, 24, 24,
+                                            0.0f, 1.0f);
+            }
+
+            draw_text(hdc, cx + card_w / 2 - 15, cy + card_h - 28, hero_names[i],
+                      kTextMain, 14);
+        }
+    }
+
+    int btn_w = 160;
+    int btn_h = 36;
+    int btn_x = (w - btn_w) / 2;
+    int btn_y = h - 90;
+    RECT btn = {btn_x, btn_y, btn_x + btn_w, btn_y + btn_h};
+    draw_rect(hdc, btn, kPlayer1Color, kTextMain);
+    draw_text(hdc, btn_x + 32, btn_y + 10, "Start Match", kTextMain, 14);
+
+    draw_text(hdc, w / 2 - 140, h - 34,
+              "Tab switch player  Left/Right select  Enter start  Esc quit",
+              kTextDim, 12);
+}
+
+static void handle_setup_input() {
+    if (g_key_pressed[VK_TAB]) {
+        g_active_player = 1 - g_active_player;
+        g_key_pressed[VK_TAB] = false;
+    }
+    if (g_key_pressed[VK_LEFT] || g_key_pressed[VK_RIGHT]) {
+        Character& c = g_chars[g_active_player];
+        if (c == Character::Kite) {
+            c = (g_key_pressed[VK_LEFT]) ? Character::Bastion : Character::Vale;
+        } else if (c == Character::Vale) {
+            c = (g_key_pressed[VK_LEFT]) ? Character::Kite : Character::Bastion;
+        } else {
+            c = (g_key_pressed[VK_LEFT]) ? Character::Vale : Character::Kite;
+        }
+        g_key_pressed[VK_LEFT] = false;
+        g_key_pressed[VK_RIGHT] = false;
+    }
+    if (g_key_pressed[VK_RETURN]) {
+        g_start_match = true;
+        g_key_pressed[VK_RETURN] = false;
+    }
+    if (g_key_pressed[VK_ESCAPE]) {
+        g_quit_requested = true;
+        g_key_pressed[VK_ESCAPE] = false;
+    }
+
+    if (g_mouse_clicked) {
+        int card_w = 160;
+        int card_h = 220;
+        int cols = 3;
+        int total_width = cols * card_w + (cols - 1) * kCardSpacing;
+        int start_x = -1;  // computed below
+        int start_y = 80;
+        int row_gap = 40;
+
+        RECT rc;
+        GetClientRect(g_hwnd, &rc);
+        int w = rc.right;
+        start_x = (w - total_width) / 2;
+
+        Character hero_chars[3] = {Character::Kite, Character::Vale, Character::Bastion};
+
+        for (int player = 0; player < 2; ++player) {
+            for (int i = 0; i < 3; ++i) {
+                int cx = start_x + i * (card_w + kCardSpacing);
+                int cy = start_y + player * (card_h + row_gap);
+                if (g_mouse_x >= cx && g_mouse_x < cx + card_w &&
+                    g_mouse_y >= cy && g_mouse_y < cy + card_h) {
+                    g_active_player = player;
+                    g_chars[player] = hero_chars[i];
+                }
+            }
+        }
+
+        int btn_w = 160;
+        int btn_h = 36;
+        int btn_x = (w - btn_w) / 2;
+        int btn_y = rc.bottom - 90;
+        if (g_mouse_x >= btn_x && g_mouse_x < btn_x + btn_w &&
+            g_mouse_y >= btn_y && g_mouse_y < btn_y + btn_h) {
+            g_start_match = true;
+        }
+
+        g_mouse_clicked = false;
+    }
+}
+
+static void render(HWND hwnd) {
     RECT rc;
     GetClientRect(hwnd, &rc);
-    int w = rc.right - rc.left;
-    int h = rc.bottom - rc.top;
+    int w = rc.right;
+    int h = rc.bottom;
     if (w <= 0 || h <= 0) return;
 
     HDC hdc_win = GetDC(hwnd);
@@ -767,57 +503,61 @@ void render(HWND hwnd) {
     HBITMAP bmp = CreateCompatibleBitmap(hdc_win, w, h);
     HBITMAP old_bmp = static_cast<HBITMAP>(SelectObject(hdc, bmp));
 
-    // Background
     RECT bg = {0, 0, w, h};
     FillRect(hdc, &bg, static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)));
 
-    // Layout - pin sidebar to right edge, center aspect-preserved court in left play region
-    int sidebar_x = w - kSidebarWidth;
-    int available_width = sidebar_x - 2 * kCourtPadding;
-    int available_height = h - kFooterHeight - 2 * kCourtPadding;
-
-    int court_width, court_height;
-    if (available_width <= 0 || available_height <= 0) {
-        // Fallback for tiny windows
-        court_width = 100;
-        court_height = 100;
+    if (g_setup_mode) {
+        render_setup(hdc, w, h);
     } else {
-        // Maintain 38:22 aspect ratio
-        double aspect_ratio = static_cast<double>(kFieldWidth) / kFieldHeight;
-        double available_aspect = static_cast<double>(available_width) / available_height;
+        int sidebar_x = w - kSidebarWidth - kCourtPadding;
+        int sidebar_y = kCourtPadding;
+        int sidebar_w = kSidebarWidth;
+        int sidebar_h = h - kCourtPadding - kFooterHeight;
 
-        if (available_aspect > aspect_ratio) {
-            // Height is limiting factor
-            court_height = available_height;
-            court_width = static_cast<int>(court_height * aspect_ratio);
-        } else {
-            // Width is limiting factor
-            court_width = available_width;
-            court_height = static_cast<int>(court_width / aspect_ratio);
+        int court_x = kCourtPadding;
+        int court_y = kCourtPadding;
+        int available_w = sidebar_x - kCourtPadding - court_x;
+        int available_h = h - kCourtPadding - kFooterHeight;
+
+        int draw_w = available_w;
+        int draw_h = static_cast<int>(draw_w * 22.0 / 38.0);
+        if (draw_h > available_h) {
+            draw_h = available_h;
+            draw_w = static_cast<int>(draw_h * 38.0 / 22.0);
         }
-    }
+        int draw_x = court_x + (available_w - draw_w) / 2;
+        int draw_y = court_y + (available_h - draw_h) / 2;
 
-    int court_x = kCourtPadding + (available_width - court_width) / 2;
-    int court_y = kCourtPadding + (available_height - court_height) / 2;
-    int sidebar_y = 0;
-
-    // Render components
-    render_court(hdc, court_x, court_y, court_width, court_height);
-    render_sidebar(hdc, sidebar_x, sidebar_y, kSidebarWidth, h);
-    render_footer(hdc, court_x, court_y, court_height);
-
-    // FPS display
-    if (!g_frame_times.empty()) {
-        double avg_time = 0.0;
-        for (double t : g_frame_times) {
-            avg_time += t;
+        int fps = 0;
+        double now = std::chrono::duration<double>(
+                         std::chrono::steady_clock::now().time_since_epoch())
+                         .count();
+        while (!g_frame_times.empty() && now - g_frame_times.front() > 1.0) {
+            g_frame_times.pop_front();
         }
-        avg_time /= g_frame_times.size();
-        double fps = (avg_time > 0.0) ? (1.0 / avg_time) : 0.0;
+        g_frame_times.push_back(now);
+        fps = static_cast<int>(g_frame_times.size());
+
+        if (draw_w > 0 && draw_h > 0) {
+            RECT court_rc = {draw_x, draw_y, draw_x + draw_w, draw_y + draw_h};
+            if (!g_assets ||
+                !g_assets->draw_image_cropped(hdc, SheetId::Arena, draw_x, draw_y,
+                                              draw_w, draw_h)) {
+                draw_rect(hdc, court_rc, kCourtBackground, kCourtBackground);
+            }
+
+            draw_court_lines(hdc, *g_assets, draw_x, draw_y, draw_w, draw_h);
+
+            g_anim.draw_entities(hdc, *g_assets, draw_x, draw_y, draw_w, draw_h);
+
+            render_footer(hdc, draw_x, draw_y + draw_h + 4);
+        }
+
+        render_sidebar(hdc, sidebar_x, sidebar_y, sidebar_w, sidebar_h, fps);
 
         char fps_buf[64];
-        snprintf(fps_buf, sizeof(fps_buf), "FPS: %.1f", fps);
-        draw_text(hdc, 10, h - 20, fps_buf, RGB(100, 255, 100), 12);
+        snprintf(fps_buf, sizeof(fps_buf), "FPS: %d", fps);
+        draw_text(hdc, w - 90, h - 20, fps_buf, kTextDim, 12);
     }
 
     BitBlt(hdc_win, 0, 0, w, h, hdc, 0, 0, SRCCOPY);
@@ -829,207 +569,360 @@ void render(HWND hwnd) {
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
     switch (msg) {
-        case WM_GETMINMAXINFO: {
-            MINMAXINFO* mmi = reinterpret_cast<MINMAXINFO*>(lparam);
-            // Set minimum tracking dimensions to keep sidebar cards legible
-            mmi->ptMinTrackSize.x = 1200;  // Minimum width for 400px sidebar + court
-            mmi->ptMinTrackSize.y = 880;   // Minimum height for all cards
-            return 0;
-        }
-
         case WM_KEYDOWN:
             if (wparam < 256) {
-                bool just_pressed = !g_key_state[wparam];
+                g_key_pressed[wparam] = !g_key_state[wparam];
                 g_key_state[wparam] = true;
-                if (just_pressed) {
-                    g_key_pressed[wparam] = true;
-                    // Only trigger global actions on just-pressed transition
-                    if (wparam == VK_ESCAPE) {
-                        g_quit_requested = true;
-                        return 0;
-                    }
-                    if (wparam == 'R') {
-                        g_reset_requested = true;
-                        return 0;
-                    }
-                    if (wparam == VK_SPACE) {
-                        g_manual_pause = !g_manual_pause;
-                        return 0;
-                    }
-                }
             }
-            break;
-
+            return 0;
         case WM_KEYUP:
-            if (wparam < 256) {
-                g_key_state[wparam] = false;
-                g_key_pressed[wparam] = false;
-            }
+            if (wparam < 256) g_key_state[wparam] = false;
+            return 0;
+        case WM_LBUTTONDOWN:
+            g_mouse_clicked = true;
+            g_mouse_x = LOWORD(lparam);
+            g_mouse_y = HIWORD(lparam);
+            return 0;
+        case WM_MOUSEACTIVATE:
+            if (g_passive) return MA_NOACTIVATE;
             break;
-
         case WM_SETFOCUS:
             g_has_focus = true;
-            break;
-
+            return 0;
         case WM_KILLFOCUS:
             g_has_focus = false;
-            // Clear all input on focus loss
-            memset(g_key_state, 0, sizeof(g_key_state));
-            memset(g_key_pressed, 0, sizeof(g_key_pressed));
-            break;
-
+            g_mouse_clicked = false;
+            std::memset(g_key_state, 0, sizeof(g_key_state));
+            std::memset(g_key_pressed, 0, sizeof(g_key_pressed));
+            g_pending_buttons = {};
+            g_input = {};
+            return 0;
+        case WM_GETMINMAXINFO:
+            if (g_min_track_width > 0 && g_min_track_height > 0) {
+                MINMAXINFO* mmi = reinterpret_cast<MINMAXINFO*>(lparam);
+                mmi->ptMinTrackSize.x = g_min_track_width;
+                mmi->ptMinTrackSize.y = g_min_track_height;
+            }
+            return 0;
         case WM_DESTROY:
             PostQuitMessage(0);
             return 0;
-
-        case WM_ERASEBKGND:
-            return 1;
     }
-    return DefWindowProc(hwnd, msg, wparam, lparam);
+    return DefWindowProcW(hwnd, msg, wparam, lparam);
 }
 
-}  // namespace
+int viewer_main(HINSTANCE hInstance, HINSTANCE hPrevInstance,
+                 LPSTR lpCmdLine, int nCmdShow) {
+    (void)hPrevInstance;
+    (void)lpCmdLine;
 
-}  // namespace pulse
+    // Parse command line using Windows argv-style parsing so quoted values are
+    // preserved.
+    int argc = 0;
+    wchar_t** argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+    if (!argv) {
+        MessageBoxA(nullptr, "Command-line parsing failed", "Pulse Court",
+                    MB_OK | MB_ICONERROR);
+        return 1;
+    }
 
-int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR lpCmdLine, int nCmdShow) {
-    using namespace pulse;
-
-    // Initialize timing
-    QueryPerformanceFrequency(&g_perf_freq);
-    QueryPerformanceCounter(&g_last_time);
-    g_last_render_time = static_cast<double>(g_last_time.QuadPart) / g_perf_freq.QuadPart;
-
-    // Parse command line.
-    std::string cmd(lpCmdLine ? lpCmdLine : "");
-    std::istringstream iss(cmd);
-    std::vector<std::string> args;
-    std::string a;
-    while (iss >> a) args.push_back(a);
-    for (std::size_t i = 0; i < args.size(); ++i) {
-        if (args[i] == "--left" && i + 1 < args.size()) {
-            if (!parse_character(args[++i].c_str(), g_chars[0])) return 1;
-        } else if (args[i] == "--right" && i + 1 < args.size()) {
-            if (!parse_character(args[++i].c_str(), g_chars[1])) return 1;
+    bool left_set = false;
+    bool right_set = false;
+    g_setup_mode = false;
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = narrow_arg(argv[i]);
+        if (arg == "--setup") {
+            g_setup_mode = true;
+        } else if (arg == "--passive") {
+            g_passive = true;
+        } else if (arg == "--left" && i + 1 < argc) {
+            left_set = parse_character(narrow_arg(argv[++i]).c_str(),
+                                       g_chars[0]);
+        } else if (arg == "--right" && i + 1 < argc) {
+            right_set = parse_character(narrow_arg(argv[++i]).c_str(),
+                                       g_chars[1]);
+        } else if (arg == "--monitor" && i + 1 < argc) {
+            g_monitor_name = argv[++i];
+            g_monitor_name_narrow = narrow_arg(g_monitor_name.c_str());
+            g_use_monitor_placement = true;
         }
     }
+    LocalFree(argv);
+
+    if (!left_set || !right_set) {
+        g_setup_mode = true;
+    }
+
+    // Resolve the requested monitor before creating the window so a failure is
+    // closed before anything is displayed.
+    MonitorPlacementResult placement_result;
+    if (g_use_monitor_placement) {
+        placement_result = find_monitor_placement(
+            g_monitor_name, kClientWidth, kClientHeight, WS_OVERLAPPEDWINDOW,
+            FALSE);
+        if (!placement_result.success) {
+            std::wstring msg = L"Monitor \"";
+            msg += g_monitor_name;
+            if (placement_result.ambiguous) {
+                msg += L"\" matches multiple displays. ";
+            } else {
+                msg += L"\" not found. ";
+            }
+            msg += L"Available monitors:\n\n";
+            for (const auto& probe : placement_result.available) {
+                msg += L"  - ";
+                msg += probe.friendly_name;
+                if (!probe.device_name.empty() &&
+                    probe.device_name != probe.friendly_name) {
+                    msg += L" (";
+                    msg += probe.device_name;
+                    msg += L")";
+                }
+                msg += L"\n";
+            }
+            if (AttachConsole(ATTACH_PARENT_PROCESS)) {
+                fwprintf(stderr, L"%s\n", msg.c_str());
+            }
+            MessageBoxW(nullptr, msg.c_str(), L"Pulse Court",
+                        MB_OK | MB_ICONERROR);
+            return 1;
+        }
+    }
+
+    Gdiplus::GdiplusStartupInput gdiplus_input;
+    ULONG_PTR gdiplus_token = 0;
+    Gdiplus::Status gdiplus_status = Gdiplus::GdiplusStartup(
+        &gdiplus_token, &gdiplus_input, nullptr);
+    if (gdiplus_status != Gdiplus::Ok) {
+        MessageBoxA(nullptr, "GDI+ initialization failed", "Pulse Court",
+                    MB_OK | MB_ICONERROR);
+        return 1;
+    }
+
+    std::unique_ptr<AssetManager> assets_local = std::make_unique<AssetManager>();
+    g_assets = assets_local.get();
+    std::filesystem::path assets_dir = find_assets_directory();
+    g_assets->load(assets_dir);
 
     WNDCLASSW wc = {};
     wc.lpfnWndProc = WndProc;
     wc.hInstance = hInstance;
-    wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
     wc.hbrBackground = static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
     wc.lpszClassName = kClassName;
-    if (!RegisterClassW(&wc)) return 1;
 
-    RECT rc = {0, 0, kClientWidth, kClientHeight};
-    AdjustWindowRect(&rc, WS_OVERLAPPEDWINDOW, FALSE);
+    std::filesystem::path icon_path = assets_dir / "icon.ico";
+    HICON hIcon = nullptr;
+    if (std::filesystem::exists(icon_path)) {
+        hIcon = reinterpret_cast<HICON>(
+            LoadImageW(nullptr, icon_path.c_str(), IMAGE_ICON, 0, 0,
+                       LR_LOADFROMFILE | LR_DEFAULTSIZE));
+    }
+    wc.hIcon = hIcon;
 
-    HWND hwnd = CreateWindowW(
-        kClassName, L"Pulse Court Viewer",
-        WS_OVERLAPPEDWINDOW, CW_USEDEFAULT,
-        CW_USEDEFAULT, rc.right - rc.left, rc.bottom - rc.top, nullptr,
-        nullptr, hInstance, nullptr);
-    if (!hwnd) return 1;
+    if (!RegisterClassW(&wc)) {
+        MessageBoxA(nullptr, "Window registration failed", "Pulse Court",
+                    MB_OK | MB_ICONERROR);
+        return 1;
+    }
 
-    ShowWindow(hwnd, nCmdShow);
-    UpdateWindow(hwnd);
+    RECT min_wr = {0, 0, kMinClientWidth, kMinClientHeight};
+    AdjustWindowRect(&min_wr, WS_OVERLAPPEDWINDOW, FALSE);
+    g_min_track_width = min_wr.right - min_wr.left;
+    g_min_track_height = min_wr.bottom - min_wr.top;
+
+    int window_x = CW_USEDEFAULT;
+    int window_y = CW_USEDEFAULT;
+    int window_width = 0;
+    int window_height = 0;
+    if (g_use_monitor_placement) {
+        const MonitorPlacement& placement = placement_result.placement;
+        window_x = placement.x;
+        window_y = placement.y;
+        window_width = placement.width;
+        window_height = placement.height;
+    } else {
+        RECT wr = {0, 0, kClientWidth, kClientHeight};
+        AdjustWindowRect(&wr, WS_OVERLAPPEDWINDOW, FALSE);
+        window_width = wr.right - wr.left;
+        window_height = wr.bottom - wr.top;
+    }
+
+    DWORD ex_style = g_passive ? WS_EX_NOACTIVATE : 0;
+    g_hwnd = CreateWindowExW(
+        ex_style, kClassName, L"Pulse Court", WS_OVERLAPPEDWINDOW, window_x,
+        window_y, window_width, window_height, nullptr, nullptr, hInstance,
+        nullptr);
+    if (!g_hwnd) {
+        MessageBoxA(nullptr, "Window creation failed", "Pulse Court",
+                    MB_OK | MB_ICONERROR);
+        return 1;
+    }
+
+    ShowWindow(g_hwnd, g_passive ? SW_SHOWNOACTIVATE : nCmdShow);
+    UpdateWindow(g_hwnd);
 
     Simulation sim(g_chars);
     g_sim = &sim;
+    g_anim.reset(g_chars);
 
-    bool running = true;
-    while (running) {
+    g_accumulated_time = 0.0;
+    g_render_accumulated_time = 0.0;
+    g_manual_pause = false;
+    g_reset_requested = false;
+
+    auto last_time = std::chrono::steady_clock::now();
+
+    while (!g_quit_requested) {
         MSG msg;
-        while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
+        while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
             if (msg.message == WM_QUIT) {
-                running = false;
+                g_quit_requested = true;
                 break;
             }
             TranslateMessage(&msg);
-            DispatchMessage(&msg);
+            DispatchMessageW(&msg);
         }
-        if (!running) break;
+        if (g_quit_requested) break;
 
-        if (g_quit_requested) {
-            running = false;
-            break;
+        auto now = std::chrono::steady_clock::now();
+        double delta = std::chrono::duration<double>(now - last_time).count();
+        last_time = now;
+
+        if (delta > kMaxCatchUp) delta = kMaxCatchUp;
+
+        if (g_setup_mode) {
+            handle_setup_input();
+            if (g_start_match) {
+                g_setup_mode = false;
+                g_start_match = false;
+                sim.reset(g_chars);
+                g_anim.reset(g_chars);
+                g_trace.clear();
+                g_accumulated_time = 0.0;
+                g_render_accumulated_time = 0.0;
+                g_manual_pause = false;
+                g_reset_requested = false;
+                g_input = {};
+                g_pending_buttons = {};
+                clear_edge_triggers();
+                continue;
+            }
+            render(g_hwnd);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            continue;
         }
+
         if (g_reset_requested) {
             sim.reset(g_chars);
-            g_effects.clear();
+            g_anim.reset(g_chars);
             g_trace.clear();
+            g_reset_requested = false;
             g_accumulated_time = 0.0;
             g_render_accumulated_time = 0.0;
             g_manual_pause = false;
-            memset(g_key_state, 0, sizeof(g_key_state));
-            memset(g_key_pressed, 0, sizeof(g_key_pressed));
-            g_reset_requested = false;
+            g_input = {};
+            g_pending_buttons = {};
+            continue;
         }
 
-        // Timing
-        LARGE_INTEGER current_time;
-        QueryPerformanceCounter(&current_time);
-        double delta = static_cast<double>(current_time.QuadPart - g_last_time.QuadPart) / g_perf_freq.QuadPart;
-        g_last_time = current_time;
+        poll_input();
 
-        // Fixed-step simulation accumulator (120 Hz, unchanged)
-        if (g_has_focus && !g_manual_pause) {
+        bool should_step = (g_has_focus || g_passive) && !g_manual_pause;
+        if (should_step) {
             g_accumulated_time += delta;
-            if (g_accumulated_time > kMaxCatchUp) {
-                g_accumulated_time = kMaxCatchUp;  // Cap catch-up
-            }
-
             while (g_accumulated_time >= kSimDt) {
-                std::array<FrameInput, 2> inputs = {poll_left_input(), poll_right_input()};
+                std::array<FrameInput, 2> in = g_input;
+                in[0].buttons = g_pending_buttons[0];
+                in[1].buttons = g_pending_buttons[1];
+                g_pending_buttons[0] = ButtonNone;
+                g_pending_buttons[1] = ButtonNone;
                 StepEvents events;
-                (void)sim.step(inputs, &events);
+                StepResult result = sim.step(in, &events);
+                g_anim.update(sim.state(), events);
 
-                // Process events
+                static std::array<std::int32_t, 3> last_bounce_tick = {
+                    -1000, -1000, -1000};
                 for (std::uint8_t i = 0; i < events.count; ++i) {
-                    add_effect(events.events[i]);
+                    const SimulationEvent& e = events.events[i];
+                    const std::int32_t tick =
+                        static_cast<std::int32_t>(sim.state().tick);
+                    if (e.type == SimulationEventType::CoreBounce) {
+                        int idx = e.actor + 1;
+                        if (tick - last_bounce_tick[idx] >=
+                            kBounceTraceCoalesceTicks) {
+                            last_bounce_tick[idx] = tick;
+                            char buf[96];
+                            if (e.effect_kind == EffectKind::PulseGate) {
+                                snprintf(buf, sizeof(buf),
+                                         "t%d: Core bounce off %s gate", tick,
+                                         actor_name(e.actor));
+                            } else if (e.actor == -1) {
+                                snprintf(buf, sizeof(buf),
+                                         "t%d: Core bounce (wall)", tick);
+                            } else {
+                                snprintf(buf, sizeof(buf),
+                                         "t%d: Core bounce by %s", tick,
+                                         actor_name(e.actor));
+                            }
+                            add_trace_entry(tick, buf, kTextDim);
+                        }
+                    } else if (e.type == SimulationEventType::StrikeStarted) {
+                        char buf[96];
+                        snprintf(buf, sizeof(buf), "t%d: Strike by %s", tick,
+                                 actor_name(e.actor));
+                        add_trace_entry(tick, buf, kTextDim);
+                    } else if (e.type == SimulationEventType::StrikeHit) {
+                        char buf[96];
+                        snprintf(buf, sizeof(buf), "t%d: Strike hit by %s",
+                                 tick, actor_name(e.actor));
+                        add_trace_entry(tick, buf, kTextDim);
+                    } else if (e.type == SimulationEventType::DashStarted) {
+                        char buf[96];
+                        snprintf(buf, sizeof(buf), "t%d: Dash by %s", tick,
+                                 actor_name(e.actor));
+                        add_trace_entry(tick, buf, kTextDim);
+                    } else if (e.type ==
+                               SimulationEventType::AbilityActivated) {
+                        char buf[96];
+                        snprintf(buf, sizeof(buf), "t%d: %s uses %s", tick,
+                                 actor_name(e.actor),
+                                 effect_kind_name(e.effect_kind));
+                        add_trace_entry(tick, buf, kTextDim);
+                    } else if (e.type == SimulationEventType::GoalScored) {
+                        char buf[96];
+                        snprintf(buf, sizeof(buf), "t%d: Goal by %s", tick,
+                                 actor_name(e.actor, "Team"));
+                        add_trace_entry(tick, buf, kTextMain);
+                    }
                 }
-                add_trace_entry(events);
 
-                clear_edge_triggers();
+                if (result.match_finished) {
+                    g_manual_pause = true;
+                }
+
                 g_accumulated_time -= kSimDt;
             }
-        } else {
-            // When paused/unfocused, just reset accumulator
-            g_accumulated_time = 0.0;
         }
 
-        // Update visual effects
-        update_effects(delta);
-
-        // Render accumulator (60 FPS cap)
         g_render_accumulated_time += delta;
-        bool should_render = !g_first_frame_rendered || g_render_accumulated_time >= kRenderDt;
-
-        if (should_render) {
-            // Track FPS only for actual rendered frames
-            double current_time_sec = static_cast<double>(current_time.QuadPart) / g_perf_freq.QuadPart;
-            double time_since_last_render = current_time_sec - g_last_render_time;
-            g_last_render_time = current_time_sec;
-            if (time_since_last_render > 0.0) {
-                g_frame_times.push_back(time_since_last_render);
-                if (g_frame_times.size() > kFpsHistory) {
-                    g_frame_times.pop_front();
-                }
-            }
-
-            // Render
-            render(hwnd);
-            g_first_frame_rendered = true;
-
-            // Drop excess after stall to sub-frame remainder
-            g_render_accumulated_time = fmod(g_render_accumulated_time, kRenderDt);
+        if (g_render_accumulated_time >= kRenderDt) {
+            g_render_accumulated_time -= kRenderDt;
+            render(g_hwnd);
         }
 
-        // Small sleep to yield CPU
-        Sleep(1);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 
-    DestroyWindow(hwnd);
+    DestroyWindow(g_hwnd);
+    g_assets = nullptr;
+    assets_local.reset();
+    Gdiplus::GdiplusShutdown(gdiplus_token);
     return 0;
+}
+
+}  // namespace pulse
+
+int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
+                     LPSTR lpCmdLine, int nCmdShow) {
+    return pulse::viewer_main(hInstance, hPrevInstance, lpCmdLine, nCmdShow);
 }
