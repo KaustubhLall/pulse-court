@@ -157,13 +157,63 @@ fixed per-call overhead from constructing a fresh `Gdiplus::Graphics` +
 `ImageAttributes` per call at `InterpolationModeHighQualityBicubic`/
 `SmoothingModeAntiAlias`. Reusing one `Graphics` per `render()` pass and
 skipping `ImageAttributes` when alpha is opaque would shave more, but
-returns are marginal now relative to switching the renderer to Direct2D
-(GPU-accelerated, part of the Windows SDK, no new external dependency) if
-this project keeps needing more headroom as sprite art grows — that would
-eliminate this whole category of CPU-resample-cost tuning rather than
-continuing to chase it. Not started; would mean rewriting
-`viewer_assets.cpp`'s drawing primitives and `render()`'s structure, a real
-rendering-backend change, not a tweak.
+returns are marginal relative to the Direct2D migration below, which
+eliminates this whole category of CPU-resample-cost tuning rather than
+continuing to chase it.
+
+### Direct2D migration (in progress)
+
+Full plan: `docs/d2d-migration-plan.md`. Branch `d2d-migration` off the
+`isometric-experiment` checkpoint that has all of the GDI perf work above.
+Brick-by-brick: a flag-gated spike first, then per-screen-mode cutovers
+(gallery → setup → gameplay), then legacy GDI/GDI+ removal — GDI stays fully
+functional until the final removal task, so any brick can be reverted
+cleanly by returning to `isometric-experiment`.
+
+**Task 1 (checkpoint) and Task 2 (spike) done.** Task 2 added
+`src/apps/viewer_d2d.{hpp,cpp}` (`D2DContext`: `ID2D1Factory`,
+`IDWriteFactory`, `IWICImagingFactory`, `ID2D1HwndRenderTarget`, one shared
+brush, all `Microsoft::WRL::ComPtr`) and a `--d2d-spike` flag that
+short-circuits `render()` into drawing one sprite (`assets/arena.png`) via
+Direct2D; the GDI path is untouched when the flag is absent. Two lifecycle
+traps found by manual review and fixed (both are exactly the "cheap-looking
+wrap that isn't" class of bug this project has hit before with GDI+):
+
+- **COM shutdown ordering.** The three COM factories must be released
+  *before* `CoUninitialize()`, not just the device-dependent render
+  target/brush. `g_d2d_ctx` has static storage duration, so if only
+  `discard_device_resources()` (render target + brush) runs at shutdown, the
+  factories are released later at program-exit static teardown — *after*
+  `CoUninitialize()` already tore down the apartment, which is undefined
+  behavior. Fixed with a separate `release_all_resources()` (all six
+  `ComPtr` members) called immediately before `CoUninitialize()`;
+  `discard_device_resources()` stays narrowly scoped since it also runs on
+  every `D2DERR_RECREATE_TARGET` device-loss recreate, where the factories
+  must *not* be released.
+- **Device-loss bitmap invalidation.** `ID2D1Bitmap` is device-dependent on
+  the specific render target that created it. Caching the loaded sprite in a
+  function-local `static` (rather than a `D2DContext` member reset alongside
+  `render_target`/`brush`) meant a device-loss recreate would skip reloading
+  and draw a bitmap belonging to the just-destroyed target. Fixed by moving
+  the bitmap onto `D2DContext` and resetting it inside
+  `discard_device_resources()`.
+
+**Measured** (`QueryPerformanceCounter`, 50x `DrawBitmap` per frame,
+instrumentation added then stripped, never committed): steady-state
+**~0.4-0.9ms** at both 1300x800 and maximized 2560x1369 — draw cost does not
+scale with window size, confirming the GPU-headroom thesis the rest of the
+migration is betting on, versus GDI's ~10-13ms/~20-28ms above.
+
+**Not independently confirmed — deferred to the user, per the plan's task-2
+evaluator gate:** visual correctness (alpha-edge fringing, resize
+stretch-smear, no-flag pixel parity vs GDI) and the Ctrl+Win+Shift+B
+device-loss recovery check. Screenshot automation is unreliable/unsafe for
+this app's `GetDC`+`BitBlt` rendering style (bypasses `WM_PAINT`/DWM
+redirection — see memory), and the device-loss hotkey restarts the graphics
+driver system-wide. Crash-safety (resize stress, launch/exit with and
+without the flag) was verified via process-liveness smoke tests.
+Tasks 3+ (gallery/setup/gameplay cutover) do not proceed until the user
+confirms these.
 
 ## Key Scope Boundaries
 
