@@ -30,8 +30,9 @@ if(WIN32 AND PULSE_BUILD_VIEWER)
         src/apps/viewer_win32.cpp
         src/apps/viewer_assets.cpp
         src/apps/viewer_monitor.cpp
+        src/apps/viewer_d2d.cpp
     )
-    target_link_libraries(pulse_viewer PRIVATE pulse_core user32 gdi32 gdiplus)
+    target_link_libraries(pulse_viewer PRIVATE pulse_core user32 gdi32 gdiplus d2d1 dwrite windowscodecs ole32)
     if(MSVC)
         target_compile_options(pulse_viewer PRIVATE /W4 /permissive- /EHsc /Zc:__cplusplus)
     endif()

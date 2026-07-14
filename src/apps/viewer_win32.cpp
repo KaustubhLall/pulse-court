@@ -4,6 +4,7 @@
 #include "fixed_math.hpp"
 #include "viewer_assets.hpp"
 #include "viewer_monitor.hpp"
+#include "viewer_d2d.hpp"
 
 #include <windows.h>
 
@@ -98,6 +99,9 @@ static std::array<std::uint8_t, 2> g_pending_buttons = {};
 static bool g_gallery_mode = false;
 static int g_gallery_sheet_index = -1;
 static int g_gallery_frame = 0;
+
+static bool g_d2d_spike = false;
+static D2DContext g_d2d_ctx;
 
 static bool g_show_hitboxes = false;
 static bool g_show_anim_debug = false;
@@ -932,6 +936,11 @@ static void render(HWND hwnd) {
     int h = rc.bottom;
     if (w <= 0 || h <= 0) return;
 
+    if (g_d2d_spike) {
+        render_d2d_spike(hwnd, g_d2d_ctx);
+        return;
+    }
+
     HDC hdc_win = GetDC(hwnd);
     HDC hdc = CreateCompatibleDC(hdc_win);
     HBITMAP bmp = CreateCompatibleBitmap(hdc_win, w, h);
@@ -1097,6 +1106,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
                 mmi->ptMinTrackSize.y = g_min_track_height;
             }
             return 0;
+        case WM_SIZE:
+            if (g_d2d_spike && g_d2d_ctx.render_target) {
+                UINT width = LOWORD(lparam);
+                UINT height = HIWORD(lparam);
+                if (width > 0 && height > 0) {
+                    g_d2d_ctx.render_target->Resize(D2D1::SizeU(width, height));
+                }
+            }
+            return 0;
         case WM_DESTROY:
             PostQuitMessage(0);
             return 0;
@@ -1128,6 +1146,8 @@ int viewer_main(HINSTANCE hInstance, HINSTANCE hPrevInstance,
             g_setup_mode = true;
         } else if (arg == "--gallery") {
             g_gallery_mode = true;
+        } else if (arg == "--d2d-spike") {
+            g_d2d_spike = true;
         } else if (arg == "--passive") {
             g_passive = true;
         } else if (arg == "--left" && i + 1 < argc) {
@@ -1186,6 +1206,22 @@ int viewer_main(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         }
     }
 
+    HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    if (FAILED(hr)) {
+        MessageBoxA(nullptr, "COM initialization failed", "Pulse Court",
+                    MB_OK | MB_ICONERROR);
+        return 1;
+    }
+
+    if (g_d2d_spike) {
+        if (!g_d2d_ctx.create_device_independent_resources()) {
+            MessageBoxA(nullptr, "Direct2D initialization failed", "Pulse Court",
+                        MB_OK | MB_ICONERROR);
+            CoUninitialize();
+            return 1;
+        }
+    }
+
     Gdiplus::GdiplusStartupInput gdiplus_input;
     ULONG_PTR gdiplus_token = 0;
     Gdiplus::Status gdiplus_status = Gdiplus::GdiplusStartup(
@@ -1193,6 +1229,7 @@ int viewer_main(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     if (gdiplus_status != Gdiplus::Ok) {
         MessageBoxA(nullptr, "GDI+ initialization failed", "Pulse Court",
                     MB_OK | MB_ICONERROR);
+        CoUninitialize();
         return 1;
     }
 
@@ -1377,6 +1414,10 @@ int viewer_main(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     g_assets = nullptr;
     assets_local.reset();
     Gdiplus::GdiplusShutdown(gdiplus_token);
+
+    g_d2d_ctx.release_all_resources();
+    CoUninitialize();
+
     return 0;
 }
 

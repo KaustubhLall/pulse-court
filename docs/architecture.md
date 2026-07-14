@@ -104,8 +104,9 @@ an intentional deferred feature, not a claimed capability.
 - `pulse_core` (library) has no OS, window, or rendering dependencies.
 - `pulse_headless` is a command-line harness with a deterministic scripted
   input tape; it contains no AI.
-- `pulse_viewer` is a Win32/GDI visualizer that links only `pulse_core`,
-  `user32`, `gdi32`. It renders at 60 FPS using a fixed-step accumulator that
+- `pulse_viewer` is a Win32/GDI visualizer that links `pulse_core`,
+  `user32`, `gdi32`, `gdiplus`, `d2d1`, `dwrite`, `windowscodecs`, and `ole32`.
+  It renders at 60 FPS using a fixed-step accumulator that
   advances the authoritative 120 Hz simulation independently. The viewer
   includes wall-clock time, floating-point animation state, and UI rendering,
   but none of these enter the core simulation, replay system, or state hashing.
