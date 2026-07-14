@@ -121,6 +121,11 @@ public:
         int frames;
     };
 
+    AssetManager() = default;
+    ~AssetManager();
+    AssetManager(const AssetManager&) = delete;
+    AssetManager& operator=(const AssetManager&) = delete;
+
     bool load(const std::filesystem::path& assets_dir);
     [[nodiscard]] Gdiplus::Bitmap* get(SheetId id) const;
     [[nodiscard]] bool has(SheetId id) const;
@@ -150,6 +155,25 @@ private:
         bitmaps_;
     static const SheetInfo kSheets[static_cast<std::size_t>(SheetId::Count)];
     std::string fallback_status_;
+
+    // draw_image_cropped's source content only changes with (id, w, h), never
+    // with (x, y) or frame-to-frame -- cache the expensive high-quality
+    // resample and only regenerate it when the requested size actually
+    // changes (e.g. on window resize).
+    //
+    // Stored as a plain GDI compatible bitmap (not a Gdiplus::Bitmap) so the
+    // cache-hit path is a raw BitBlt. A same-size Gdiplus::Graphics::DrawImage
+    // of the cached bitmap was measured to cost ~19-24ms/frame at a
+    // 2232x1292 buffer (scales with destination pixel count even at
+    // InterpolationModeNearestNeighbor) -- the GDI+ Graphics abstraction
+    // itself has real per-pixel cost for a full-image blit, not just the
+    // resample math. BitBlt for the same case is untimed-negligible.
+    mutable HDC cropped_cache_hdc_ = nullptr;
+    mutable HBITMAP cropped_cache_bmp_ = nullptr;
+    mutable HBITMAP cropped_cache_old_bmp_ = nullptr;
+    mutable SheetId cropped_cache_id_ = SheetId::Count;
+    mutable int cropped_cache_w_ = -1;
+    mutable int cropped_cache_h_ = -1;
 };
 
 class AnimationController {

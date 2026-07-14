@@ -31,9 +31,31 @@ constexpr int kCardPadding = 8;
 constexpr int kCardSpacing = 16;
 constexpr int kFooterHeight = 52;
 constexpr int kCourtPadding = 16;
+// Court content (arena background, lines, player/VFX sprites) renders into an
+// offscreen buffer capped at this width, then one upscale blit fills however
+// large the actual on-screen court rect is. This bounds worst-case cost for
+// pathological window sizes (e.g. a borderless span across multiple
+// monitors), but in practice per-sprite draw cost is now dominated by fixed
+// per-call GDI+ overhead, not resample math -- measured flat (~5.4-6.9ms)
+// across buf_w 1100/1600/2232 (a 4.1x pixel-area range) after the
+// sprites/display/ bake fix. 2560 covers real single-monitor fullscreen at
+// effectively native quality (no visible upscale blur) on anything up to a
+// full 1440p-wide court; only a wider span pays the one extra (still cheap,
+// single-blit) upscale.
+constexpr int kCourtInternalMaxWidth = 2560;
 constexpr double kSimHz = 120.0;
 constexpr double kSimDt = 1.0 / kSimHz;
-constexpr double kRenderDt = 1.0 / 60.0;
+// Render FPS cap steps, cycled with the '-'/'=' hotkeys. One index past the
+// last entry means uncapped (render every loop iteration). This only throttles
+// presentation: Simulation::step() always advances on the kSimDt accumulator
+// below, independent of how often render() runs, so animation/gameplay timing
+// (all of it counted in sim ticks, see AnimationController::update) cannot
+// speed up or slow down with the render cap.
+constexpr double kRenderFpsSteps[] = {30.0, 60.0, 90.0, 120.0, 144.0};
+constexpr int kRenderFpsStepCount =
+    static_cast<int>(sizeof(kRenderFpsSteps) / sizeof(kRenderFpsSteps[0]));
+constexpr int kRenderFpsOptionCount = kRenderFpsStepCount + 1;  // + Uncapped
+constexpr int kDefaultRenderFpsStep = 1;  // 60 FPS
 constexpr double kMaxCatchUp = 0.1;
 constexpr std::size_t kFpsHistory = 30;
 constexpr std::size_t kMaxTraceEntries = 12;
@@ -83,6 +105,7 @@ static bool g_pseudo3d = false;
 static bool g_bot_active = false;
 static double g_sim_speed = 1.0;
 static bool g_step_requested = false;
+static int g_render_fps_step = kDefaultRenderFpsStep;
 
 static int g_min_track_width = 0;
 static int g_min_track_height = 0;
@@ -194,6 +217,36 @@ static void add_trace_entry(std::int32_t tick, const char* text,
     g_trace.push_back(e);
     if (g_trace.size() > kMaxTraceEntries) {
         g_trace.pop_front();
+    }
+}
+
+static double render_dt() {
+    return (g_render_fps_step < kRenderFpsStepCount)
+               ? 1.0 / kRenderFpsSteps[g_render_fps_step]
+               : 0.0;
+}
+
+static void format_fps_cap(char* buf, std::size_t n) {
+    if (g_render_fps_step < kRenderFpsStepCount) {
+        snprintf(buf, n, "%d", static_cast<int>(kRenderFpsSteps[g_render_fps_step]));
+    } else {
+        snprintf(buf, n, "Uncapped");
+    }
+}
+
+// Cycles the render FPS cap. Called once per loop iteration regardless of
+// mode (gameplay/setup/gallery) so the hotkey works everywhere; explicitly
+// clears the two keys it consumes since not every mode's input handler does
+// a blanket edge-trigger clear.
+static void poll_fps_hotkeys() {
+    if (g_key_pressed[VK_OEM_MINUS]) {
+        g_render_fps_step =
+            (g_render_fps_step - 1 + kRenderFpsOptionCount) % kRenderFpsOptionCount;
+        g_key_pressed[VK_OEM_MINUS] = false;
+    }
+    if (g_key_pressed[VK_OEM_PLUS]) {
+        g_render_fps_step = (g_render_fps_step + 1) % kRenderFpsOptionCount;
+        g_key_pressed[VK_OEM_PLUS] = false;
     }
 }
 
@@ -378,7 +431,10 @@ static void render_sidebar(HDC hdc, int x, int y, int w, int h, int fps) {
     snprintf(buf, sizeof(buf), "Phase: %s | Tick: %d  Score: %d - %d",
              phase_name(s.phase), s.tick, s.score[0], s.score[1]);
     draw_text(hdc, x + 18, yy + 22, buf, kTextDim, 12);
-    snprintf(buf, sizeof(buf), "Sim: 120 Hz | Display: %d FPS", fps);
+    char fps_cap[16];
+    format_fps_cap(fps_cap, sizeof(fps_cap));
+    snprintf(buf, sizeof(buf), "Sim: 120 Hz | Display: %d FPS (cap %s)", fps,
+             fps_cap);
     draw_text(hdc, x + 18, yy + 36, buf, kTextDim, 12);
     int next = static_cast<int>(((s.tick / kDecisionIntervalTicks) + 1) *
                                 kDecisionIntervalTicks);
@@ -446,7 +502,8 @@ static void render_sidebar(HDC hdc, int x, int y, int w, int h, int fps) {
     draw_text(hdc, x + 12, yy, "R Reset  Space Pause  Esc Quit", kTextDim, 12);
     yy += 14;
     draw_text(hdc, x + 12, yy,
-              "F1 hitbox  F2 anim  F3 3D  B bot  N step  [ ] speed", kTextDim, 12);
+              "F1 hitbox  F2 anim  F3 3D  B bot  N step  [ ] speed  -/= fps",
+              kTextDim, 12);
     yy += 14;
 
     int policy_h = h - (yy - y) - 10;
@@ -534,7 +591,7 @@ static void render_footer(HDC hdc, int x, int y) {
     }
 
     draw_text(hdc, x, yy,
-              "F1 hitbox / F2 anim / F3 3D / B bot / N step / [ ] speed",
+              "F1 hitbox / F2 anim / F3 3D / B bot / N step / [ ] speed / -/= fps",
               kTextDim, 12);
 }
 
@@ -925,15 +982,43 @@ static void render(HWND hwnd) {
 
         if (draw_w > 0 && draw_h > 0) {
             RECT court_rc = {draw_x, draw_y, draw_x + draw_w, draw_y + draw_h};
-            if (!g_assets ||
-                !g_assets->draw_image_cropped(hdc, SheetId::Arena, draw_x, draw_y,
-                                              draw_w, draw_h)) {
+
+            int buf_w = std::min(draw_w, kCourtInternalMaxWidth);
+            int buf_h = static_cast<int>(buf_w * 22.0 / 38.0);
+            if (buf_w > 0 && buf_h > 0) {
+                HDC buf_hdc = CreateCompatibleDC(hdc);
+                HBITMAP buf_bmp = CreateCompatibleBitmap(hdc, buf_w, buf_h);
+                HBITMAP buf_old = static_cast<HBITMAP>(SelectObject(buf_hdc, buf_bmp));
+
+                if (!g_assets || !g_assets->draw_image_cropped(buf_hdc, SheetId::Arena,
+                                                               0, 0, buf_w, buf_h)) {
+                    RECT full = {0, 0, buf_w, buf_h};
+                    draw_rect(buf_hdc, full, kCourtBackground, kCourtBackground);
+                }
+
+                draw_court_lines(buf_hdc, *g_assets, 0, 0, buf_w, buf_h);
+
+                g_anim.draw_entities(buf_hdc, *g_assets, 0, 0, buf_w, buf_h);
+
+                // Single upscale/downscale blit from the capped internal buffer to
+                // the real on-screen court rect -- this is the only place resample
+                // cost scales with window size, and it's one blit, not one per
+                // sprite. COLORONCOLOR (not HALFTONE): this is always a
+                // magnification (buffer is capped smaller than most on-screen
+                // court rects), where HALFTONE's dithered-averaging quality
+                // benefit (built for minification) doesn't apply but its cost
+                // does -- measured ~16-19ms at a 2560-wide window vs ~1.7-4ms
+                // with COLORONCOLOR for the same blit.
+                SetStretchBltMode(hdc, COLORONCOLOR);
+                StretchBlt(hdc, draw_x, draw_y, draw_w, draw_h, buf_hdc, 0, 0, buf_w,
+                          buf_h, SRCCOPY);
+
+                SelectObject(buf_hdc, buf_old);
+                DeleteObject(buf_bmp);
+                DeleteDC(buf_hdc);
+            } else {
                 draw_rect(hdc, court_rc, kCourtBackground, kCourtBackground);
             }
-
-            draw_court_lines(hdc, *g_assets, draw_x, draw_y, draw_w, draw_h);
-
-            g_anim.draw_entities(hdc, *g_assets, draw_x, draw_y, draw_w, draw_h);
 
             if (g_show_hitboxes) {
                 render_hitbox_overlay(hdc, draw_x, draw_y, draw_w, draw_h);
@@ -957,6 +1042,22 @@ static void render(HWND hwnd) {
     DeleteObject(bmp);
     DeleteDC(hdc);
     ReleaseDC(hwnd, hdc_win);
+}
+
+// Presents at the current render FPS cap (0 dt means uncapped: render every
+// call). Purely a presentation throttle -- see the kRenderFpsSteps comment;
+// this never touches g_accumulated_time or the simulation.
+static void render_throttled(double delta) {
+    double dt = render_dt();
+    if (dt <= 0.0) {
+        render(g_hwnd);
+        return;
+    }
+    g_render_accumulated_time += delta;
+    if (g_render_accumulated_time >= dt) {
+        g_render_accumulated_time -= dt;
+        render(g_hwnd);
+    }
 }
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
@@ -1191,13 +1292,11 @@ int viewer_main(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
         if (delta > kMaxCatchUp) delta = kMaxCatchUp;
 
+        poll_fps_hotkeys();
+
         if (g_gallery_mode) {
             handle_gallery_input();
-            g_render_accumulated_time += delta;
-            if (g_render_accumulated_time >= kRenderDt) {
-                g_render_accumulated_time -= kRenderDt;
-                render(g_hwnd);
-            }
+            render_throttled(delta);
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
             continue;
         }
@@ -1220,7 +1319,7 @@ int viewer_main(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                 clear_edge_triggers();
                 continue;
             }
-            render(g_hwnd);
+            render_throttled(delta);
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
             continue;
         }
@@ -1269,11 +1368,7 @@ int viewer_main(HINSTANCE hInstance, HINSTANCE hPrevInstance,
             g_step_requested = false;
         }
 
-        g_render_accumulated_time += delta;
-        if (g_render_accumulated_time >= kRenderDt) {
-            g_render_accumulated_time -= kRenderDt;
-            render(g_hwnd);
-        }
+        render_throttled(delta);
 
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }

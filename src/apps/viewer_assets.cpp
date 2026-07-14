@@ -59,6 +59,25 @@ constexpr int kCleanSafetyBorder = 8;
 constexpr double kBodyFeetAnchorFraction =
     static_cast<double>(kCleanTileSize - kCleanSafetyBorder) / kCleanTileSize;
 
+// Body animation durations in simulation ticks (120 Hz, see kSimHz in
+// viewer_win32.cpp). BodyState::elapsed is only ever incremented inside
+// AnimationController::update(), which runs once per simulation tick
+// regardless of render rate -- these durations (and therefore all animation
+// playback speed) are unaffected by the render FPS cap.
+//
+// Frame selection below scales by the sprite sheet's actual column count
+// (AssetManager::SheetInfo::columns) rather than a hardcoded frame count, so
+// adding more columns to a sheet later smooths the existing animation instead
+// of requiring a matching code change. Idle/Move loop; the rest are one-shot
+// and clamp at the final frame.
+constexpr std::int32_t kIdleLoopTicks = 60;
+constexpr std::int32_t kMoveLoopTicks = 40;
+constexpr std::int32_t kMoveTransitionTicks = 8;
+constexpr std::int32_t kStrikeAnimTicks = 18;
+constexpr std::int32_t kDashAnimTicks = 16;
+constexpr std::int32_t kAbilityAnimTicks = 18;
+constexpr std::int32_t kGoalAnimTicks = 40;
+
 // Code-driven body pose transforms use a normalized "action progress" curve
 // that rises from 0 at action start to 1 at action end and maps through a
 // half-sine pulse so each pose returns smoothly to the idle state.
@@ -235,43 +254,50 @@ std::filesystem::path find_assets_directory() {
     return std::filesystem::current_path() / "assets";
 }
 
+// Every entry except arena.png is baked by scripts/bake_display_sprites.py
+// from the master art (assets/sprites/animated/manifest.json is the source
+// of truth for input paths and target tile sizes) down to a size close to
+// its actual on-screen draw size, so GDI+ resamples from near-native-size
+// source images instead of the full-resolution authored/cleaned art. Re-run
+// that script (after scripts/clean_sprites.py, if body sheets changed)
+// whenever source art changes; these paths/grids stay the same either way.
 const AssetManager::SheetInfo AssetManager::kSheets[static_cast<std::size_t>(
     SheetId::Count)] = {
     {L"arena.png", 1, 1, 1},
-    {L"sprites/animated/ability_icons_3x1.png", 3, 1, 3},
-    {L"sprites/animated/core_spin_4x2.png", 4, 2, 8},
-    {L"sprites/animated/core_impact_3x2.png", 3, 2, 6},
-    {L"sprites/animated/strike_sweep_3x2.png", 3, 2, 6},
-    {L"sprites/animated/dash_trail_3x2.png", 3, 2, 6},
-    {L"sprites/animated/jetstep_fx_6x3.png", 6, 3, 18},
-    {L"sprites/animated/anchor_well_fx_6x3.png", 6, 3, 18},
-    {L"sprites/animated/pulse_gate_fx_6x3.png", 6, 3, 18},
-    {L"sprites/animated/goal_burst_4x3.png", 4, 3, 12},
-    {L"sprites/animated/kickoff_pulse_4x2.png", 4, 2, 8},
-    {L"sprites/clean/kite_idle_4x4.png", 4, 4, 16},
-    {L"sprites/clean/kite_move_loop_4x4.png", 4, 4, 16},
-    {L"sprites/clean/kite_move_transition_4x4.png", 4, 4, 16},
-    {L"sprites/clean/kite_strike_6x4.png", 6, 4, 24},
-    {L"sprites/clean/kite_dash_5x4.png", 5, 4, 20},
-    {L"sprites/clean/kite_ability_6x4.png", 6, 4, 24},
-    {L"sprites/clean/kite_goal_win_4x4.png", 4, 4, 16},
-    {L"sprites/clean/kite_goal_loss_4x4.png", 4, 4, 16},
-    {L"sprites/clean/vale_idle_4x4.png", 4, 4, 16},
-    {L"sprites/clean/vale_move_loop_4x4.png", 4, 4, 16},
-    {L"sprites/clean/vale_move_transition_4x4.png", 4, 4, 16},
-    {L"sprites/clean/vale_strike_6x4.png", 6, 4, 24},
-    {L"sprites/clean/vale_dash_5x4.png", 5, 4, 20},
-    {L"sprites/clean/vale_ability_6x4.png", 6, 4, 24},
-    {L"sprites/clean/vale_goal_win_4x4.png", 4, 4, 16},
-    {L"sprites/clean/vale_goal_loss_4x4.png", 4, 4, 16},
-    {L"sprites/clean/bastion_idle_4x4.png", 4, 4, 16},
-    {L"sprites/clean/bastion_move_loop_4x4.png", 4, 4, 16},
-    {L"sprites/clean/bastion_move_transition_4x4.png", 4, 4, 16},
-    {L"sprites/clean/bastion_strike_6x4.png", 6, 4, 24},
-    {L"sprites/clean/bastion_dash_5x4.png", 5, 4, 20},
-    {L"sprites/clean/bastion_ability_6x4.png", 6, 4, 24},
-    {L"sprites/clean/bastion_goal_win_4x4.png", 4, 4, 16},
-    {L"sprites/clean/bastion_goal_loss_4x4.png", 4, 4, 16},
+    {L"sprites/display/ability_icons_3x1.png", 3, 1, 3},
+    {L"sprites/display/core_spin_4x2.png", 4, 2, 8},
+    {L"sprites/display/core_impact_3x2.png", 3, 2, 6},
+    {L"sprites/display/strike_sweep_3x2.png", 3, 2, 6},
+    {L"sprites/display/dash_trail_3x2.png", 3, 2, 6},
+    {L"sprites/display/jetstep_fx_6x3.png", 6, 3, 18},
+    {L"sprites/display/anchor_well_fx_6x3.png", 6, 3, 18},
+    {L"sprites/display/pulse_gate_fx_6x3.png", 6, 3, 18},
+    {L"sprites/display/goal_burst_4x3.png", 4, 3, 12},
+    {L"sprites/display/kickoff_pulse_4x2.png", 4, 2, 8},
+    {L"sprites/display/kite_idle_4x4.png", 4, 4, 16},
+    {L"sprites/display/kite_move_loop_4x4.png", 4, 4, 16},
+    {L"sprites/display/kite_move_transition_4x4.png", 4, 4, 16},
+    {L"sprites/display/kite_strike_6x4.png", 6, 4, 24},
+    {L"sprites/display/kite_dash_5x4.png", 5, 4, 20},
+    {L"sprites/display/kite_ability_6x4.png", 6, 4, 24},
+    {L"sprites/display/kite_goal_win_4x4.png", 4, 4, 16},
+    {L"sprites/display/kite_goal_loss_4x4.png", 4, 4, 16},
+    {L"sprites/display/vale_idle_4x4.png", 4, 4, 16},
+    {L"sprites/display/vale_move_loop_4x4.png", 4, 4, 16},
+    {L"sprites/display/vale_move_transition_4x4.png", 4, 4, 16},
+    {L"sprites/display/vale_strike_6x4.png", 6, 4, 24},
+    {L"sprites/display/vale_dash_5x4.png", 5, 4, 20},
+    {L"sprites/display/vale_ability_6x4.png", 6, 4, 24},
+    {L"sprites/display/vale_goal_win_4x4.png", 4, 4, 16},
+    {L"sprites/display/vale_goal_loss_4x4.png", 4, 4, 16},
+    {L"sprites/display/bastion_idle_4x4.png", 4, 4, 16},
+    {L"sprites/display/bastion_move_loop_4x4.png", 4, 4, 16},
+    {L"sprites/display/bastion_move_transition_4x4.png", 4, 4, 16},
+    {L"sprites/display/bastion_strike_6x4.png", 6, 4, 24},
+    {L"sprites/display/bastion_dash_5x4.png", 5, 4, 20},
+    {L"sprites/display/bastion_ability_6x4.png", 6, 4, 24},
+    {L"sprites/display/bastion_goal_win_4x4.png", 4, 4, 16},
+    {L"sprites/display/bastion_goal_loss_4x4.png", 4, 4, 16},
 };
 
 bool AssetManager::load(const std::filesystem::path& assets_dir) {
@@ -391,37 +417,71 @@ bool AssetManager::draw_sprite(HDC hdc, SheetId id, int frame, int center_x,
     return true;
 }
 
+AssetManager::~AssetManager() {
+    if (cropped_cache_hdc_) {
+        SelectObject(cropped_cache_hdc_, cropped_cache_old_bmp_);
+        DeleteDC(cropped_cache_hdc_);
+    }
+    if (cropped_cache_bmp_) DeleteObject(cropped_cache_bmp_);
+}
+
 bool AssetManager::draw_image_cropped(HDC hdc, SheetId id, int x, int y, int w,
                                       int h) const {
     Gdiplus::Bitmap* bmp = get(id);
     if (!bmp) return false;
+    if (w <= 0 || h <= 0) return false;
 
-    int img_w = static_cast<int>(bmp->GetWidth());
-    int img_h = static_cast<int>(bmp->GetHeight());
-    double src_aspect = static_cast<double>(img_w) / img_h;
-    double dst_aspect = static_cast<double>(w) / h;
+    if (!cropped_cache_hdc_ || cropped_cache_id_ != id || cropped_cache_w_ != w ||
+        cropped_cache_h_ != h) {
+        int img_w = static_cast<int>(bmp->GetWidth());
+        int img_h = static_cast<int>(bmp->GetHeight());
+        double src_aspect = static_cast<double>(img_w) / img_h;
+        double dst_aspect = static_cast<double>(w) / h;
 
-    int src_x, src_y, src_w, src_h;
-    if (src_aspect > dst_aspect) {
-        src_h = img_h;
-        src_w = static_cast<int>(img_h * dst_aspect);
-        src_x = (img_w - src_w) / 2;
-        src_y = 0;
-    } else {
-        src_w = img_w;
-        src_h = static_cast<int>(img_w / dst_aspect);
-        src_x = 0;
-        src_y = (img_h - src_h) / 2;
+        int src_x, src_y, src_w, src_h;
+        if (src_aspect > dst_aspect) {
+            src_h = img_h;
+            src_w = static_cast<int>(img_h * dst_aspect);
+            src_x = (img_w - src_w) / 2;
+            src_y = 0;
+        } else {
+            src_w = img_w;
+            src_h = static_cast<int>(img_w / dst_aspect);
+            src_x = 0;
+            src_y = (img_h - src_h) / 2;
+        }
+
+        if (cropped_cache_hdc_) {
+            SelectObject(cropped_cache_hdc_, cropped_cache_old_bmp_);
+            DeleteDC(cropped_cache_hdc_);
+            DeleteObject(cropped_cache_bmp_);
+        }
+        cropped_cache_hdc_ = CreateCompatibleDC(hdc);
+        cropped_cache_bmp_ = CreateCompatibleBitmap(hdc, w, h);
+        cropped_cache_old_bmp_ = static_cast<HBITMAP>(
+            SelectObject(cropped_cache_hdc_, cropped_cache_bmp_));
+
+        Gdiplus::Graphics cache_gfx(cropped_cache_hdc_);
+        cache_gfx.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);
+        cache_gfx.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHalf);
+        cache_gfx.SetCompositingMode(Gdiplus::CompositingModeSourceCopy);
+        cache_gfx.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+        Gdiplus::Rect dest(0, 0, w, h);
+        cache_gfx.DrawImage(bmp, dest, src_x, src_y, src_w, src_h,
+                            Gdiplus::UnitPixel);
+        cache_gfx.Flush(Gdiplus::FlushIntentionFlush);
+
+        cropped_cache_id_ = id;
+        cropped_cache_w_ = w;
+        cropped_cache_h_ = h;
     }
 
-    Gdiplus::Graphics gfx(hdc);
-    gfx.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);
-    gfx.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHalf);
-    gfx.SetCompositingMode(Gdiplus::CompositingModeSourceOver);
-    gfx.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
-    Gdiplus::Rect dest(x, y, w, h);
-    gfx.DrawImage(bmp, dest, src_x, src_y, src_w, src_h, Gdiplus::UnitPixel);
-    gfx.Flush(Gdiplus::FlushIntentionFlush);
+    // Cached bitmap is already exactly w x h and lives in a GDI-compatible DC,
+    // so this is a raw BitBlt, not a GDI+ call -- the expensive resample
+    // above only reruns on a real size change (window resize), not every
+    // frame, and the cache-hit path itself doesn't pay GDI+'s per-pixel
+    // Graphics overhead either.
+    BitBlt(hdc, x, y, w, h, cropped_cache_hdc_, 0, 0, SRCCOPY);
     return true;
 }
 
@@ -562,32 +622,37 @@ AnimationController::BodyFrame AnimationController::resolve_body_frame(
     SheetId sheet = body_sheet(character, b.anim);
     const AssetManager::SheetInfo& s = AssetManager::info(sheet);
     int cols = s.columns;
+    int half = std::max(1, cols / 2);
     int frame = row * cols;
     switch (b.anim) {
         case BodyAnim::Idle:
-            frame = row * cols + ((b.elapsed / 15) % 4);
+            frame = row * cols + (b.elapsed * cols / kIdleLoopTicks) % cols;
             break;
         case BodyAnim::Move:
-            frame = row * cols + ((b.elapsed / 10) % 4);
+            frame = row * cols + (b.elapsed * cols / kMoveLoopTicks) % cols;
             break;
         case BodyAnim::MoveStart:
-            frame = row * cols + std::min(1, b.elapsed / 4);
+            frame = row * cols +
+                    std::min(half - 1, (b.elapsed * half) / kMoveTransitionTicks);
             break;
         case BodyAnim::MoveStop:
-            frame = row * cols + 2 + std::min(1, b.elapsed / 4);
+            frame = row * cols + half +
+                    std::min(half - 1, (b.elapsed * half) / kMoveTransitionTicks);
             break;
         case BodyAnim::Strike:
-            frame = row * cols + std::min(cols - 1, (b.elapsed * cols) / 18);
+            frame = row * cols +
+                    std::min(cols - 1, (b.elapsed * cols) / kStrikeAnimTicks);
             break;
         case BodyAnim::Dash:
-            frame = row * cols + std::min(cols - 1, (b.elapsed * cols) / 16);
+            frame = row * cols + std::min(cols - 1, (b.elapsed * cols) / kDashAnimTicks);
             break;
         case BodyAnim::Ability:
-            frame = row * cols + std::min(cols - 1, (b.elapsed * cols) / 18);
+            frame = row * cols +
+                    std::min(cols - 1, (b.elapsed * cols) / kAbilityAnimTicks);
             break;
         case BodyAnim::GoalWin:
         case BodyAnim::GoalLoss:
-            frame = row * cols + std::min(cols - 1, (b.elapsed * cols) / 40);
+            frame = row * cols + std::min(cols - 1, (b.elapsed * cols) / kGoalAnimTicks);
             break;
     }
     return {sheet, frame};
@@ -630,23 +695,23 @@ void AnimationController::update(const GameState& state,
         if (b.anim == BodyAnim::Idle && b.moving) {
             b.anim = BodyAnim::MoveStart;
             b.elapsed = 0;
-        } else if (b.anim == BodyAnim::MoveStart && b.elapsed >= 8) {
+        } else if (b.anim == BodyAnim::MoveStart && b.elapsed >= kMoveTransitionTicks) {
             b.anim = BodyAnim::Move;
             b.elapsed = 0;
         } else if (b.anim == BodyAnim::Move && !b.moving) {
             b.anim = BodyAnim::MoveStop;
             b.elapsed = 0;
-        } else if (b.anim == BodyAnim::MoveStop && b.elapsed >= 8) {
+        } else if (b.anim == BodyAnim::MoveStop && b.elapsed >= kMoveTransitionTicks) {
             b.anim = BodyAnim::Idle;
             b.elapsed = 0;
-        } else if (b.anim == BodyAnim::Strike && b.elapsed >= 18) {
+        } else if (b.anim == BodyAnim::Strike && b.elapsed >= kStrikeAnimTicks) {
             resolve_action_end(b);
-        } else if (b.anim == BodyAnim::Dash && b.elapsed >= 16) {
+        } else if (b.anim == BodyAnim::Dash && b.elapsed >= kDashAnimTicks) {
             resolve_action_end(b);
-        } else if (b.anim == BodyAnim::Ability && b.elapsed >= 18) {
+        } else if (b.anim == BodyAnim::Ability && b.elapsed >= kAbilityAnimTicks) {
             resolve_action_end(b);
         } else if ((b.anim == BodyAnim::GoalWin || b.anim == BodyAnim::GoalLoss) &&
-                   b.elapsed >= 40) {
+                   b.elapsed >= kGoalAnimTicks) {
             resolve_action_end(b);
         }
     }
@@ -899,20 +964,23 @@ void AnimationController::draw_body(HDC hdc, const AssetManager& assets, int cou
 
     const AssetManager::SheetInfo& s = assets.info(sheet);
     int cols = s.columns;
+    int half = std::max(1, cols / 2);
     int frame = row * cols;
 
     switch (b.anim) {
         case BodyAnim::Idle:
-            frame = row * cols + ((b.elapsed / 15) % 4);
+            frame = row * cols + (b.elapsed * cols / kIdleLoopTicks) % cols;
             break;
         case BodyAnim::MoveStart:
-            frame = row * cols + ((b.elapsed / 2) % 4);
+            frame = row * cols +
+                    std::min(half - 1, (b.elapsed * half) / kMoveTransitionTicks);
             break;
         case BodyAnim::Move:
-            frame = row * cols + ((b.elapsed / 10) % 4);
+            frame = row * cols + (b.elapsed * cols / kMoveLoopTicks) % cols;
             break;
         case BodyAnim::MoveStop:
-            frame = row * cols + ((2 + b.elapsed / 2) % 4);
+            frame = row * cols + half +
+                    std::min(half - 1, (b.elapsed * half) / kMoveTransitionTicks);
             break;
         default:
             // Strike, Dash, Ability, and goal poses use a stable idle frame.
@@ -926,7 +994,7 @@ void AnimationController::draw_body(HDC hdc, const AssetManager& assets, int cou
 
     switch (b.anim) {
         case BodyAnim::Strike: {
-            double t = static_cast<double>(b.elapsed) / 18.0;
+            double t = static_cast<double>(b.elapsed) / static_cast<double>(kStrikeAnimTicks);
             double pulse = std::sin(t * kPi);
             double offset = pr * kStrikeLungeDistance * pulse;
             draw_x = px + static_cast<int>(static_cast<double>(b.facing.x) *
@@ -938,7 +1006,7 @@ void AnimationController::draw_body(HDC hdc, const AssetManager& assets, int cou
             break;
         }
         case BodyAnim::Dash: {
-            double t = static_cast<double>(b.elapsed) / 16.0;
+            double t = static_cast<double>(b.elapsed) / static_cast<double>(kDashAnimTicks);
             double pulse = std::sin(t * kPi);
             double offset = pr * kDashLeanDistance * pulse;
             draw_x = px + static_cast<int>(static_cast<double>(b.facing.x) *
@@ -950,7 +1018,7 @@ void AnimationController::draw_body(HDC hdc, const AssetManager& assets, int cou
             break;
         }
         case BodyAnim::Ability: {
-            double t = static_cast<double>(b.elapsed) / 18.0;
+            double t = static_cast<double>(b.elapsed) / static_cast<double>(kAbilityAnimTicks);
             double pulse = std::sin(t * kPi);
             double lunge = pr * kAbilityLungeDistance * pulse;
             int lift = static_cast<int>(pr * kAbilityLiftDistance * pulse);
@@ -965,7 +1033,7 @@ void AnimationController::draw_body(HDC hdc, const AssetManager& assets, int cou
             break;
         }
         case BodyAnim::GoalWin: {
-            double t = static_cast<double>(b.elapsed) / 40.0;
+            double t = static_cast<double>(b.elapsed) / static_cast<double>(kGoalAnimTicks);
             double pulse = std::sin(t * kPi);
             draw_y = py - static_cast<int>(pr * kGoalWinJumpDistance * pulse);
             int new_size = static_cast<int>(draw_w * (1.0 + kGoalWinPulseScale * pulse));
@@ -974,7 +1042,7 @@ void AnimationController::draw_body(HDC hdc, const AssetManager& assets, int cou
             break;
         }
         case BodyAnim::GoalLoss: {
-            double t = static_cast<double>(b.elapsed) / 40.0;
+            double t = static_cast<double>(b.elapsed) / static_cast<double>(kGoalAnimTicks);
             double pulse = std::sin(t * kPi);
             draw_y = py + static_cast<int>(pr * kGoalLossSlumpDistance * pulse);
             int new_size = static_cast<int>(draw_w * (1.0 - kGoalLossPulseScale * pulse));
