@@ -10,6 +10,8 @@
 #include <windows.h>
 #include <gdiplus.h>
 
+#include "viewer_d2d.hpp"
+
 #include <array>
 #include <cstdint>
 #include <filesystem>
@@ -129,6 +131,17 @@ public:
     bool load(const std::filesystem::path& assets_dir);
     [[nodiscard]] Gdiplus::Bitmap* get(SheetId id) const;
     [[nodiscard]] bool has(SheetId id) const;
+
+    // Device-dependent D2D bitmaps for every loaded sheet. Created against the
+    // context's current render target; must be released and recreated on
+    // device loss (re-decodes from disk -- device loss is rare, a sub-second
+    // hitch is acceptable, so no system-memory copies are kept).
+    bool create_device_bitmaps(D2DContext& ctx);
+    void release_device_bitmaps();
+    [[nodiscard]] ID2D1Bitmap* d2d_bitmap(SheetId id) const;
+    // Pixel size of a loaded sheet (0x0 when missing), so callers don't need
+    // to reach into the underlying bitmap object.
+    [[nodiscard]] SIZE sheet_size(SheetId id) const;
     [[nodiscard]] static const SheetInfo& info(SheetId id);
     [[nodiscard]] const std::filesystem::path& assets_dir() const;
     [[nodiscard]] const std::string& fallback_status() const;
@@ -143,6 +156,15 @@ public:
                                    float alpha = 1.0f,
                                    float anchor_y = 0.5f) const;
 
+    // D2D twin of draw_sprite. Same frame/grid math; alpha is DrawBitmap's
+    // opacity parameter and rotation is a render-target transform that is
+    // always restored to identity before returning.
+    [[nodiscard]] bool draw_sprite(D2DContext& ctx, SheetId id, int frame,
+                                   int center_x, int center_y, int dest_w,
+                                   int dest_h, float angle_deg = 0.0f,
+                                   float alpha = 1.0f,
+                                   float anchor_y = 0.5f) const;
+
     // Draw a full image cropped to cover a destination rectangle while preserving
     // the source aspect ratio.
     [[nodiscard]] bool draw_image_cropped(HDC hdc, SheetId id, int x, int y,
@@ -153,6 +175,10 @@ private:
     std::array<std::unique_ptr<Gdiplus::Bitmap>,
                static_cast<std::size_t>(SheetId::Count)>
         bitmaps_;
+    std::array<Microsoft::WRL::ComPtr<ID2D1Bitmap>,
+               static_cast<std::size_t>(SheetId::Count)>
+        d2d_bitmaps_;
+    std::array<SIZE, static_cast<std::size_t>(SheetId::Count)> sheet_sizes_ = {};
     static const SheetInfo kSheets[static_cast<std::size_t>(SheetId::Count)];
     std::string fallback_status_;
 

@@ -103,17 +103,33 @@ static int g_gallery_frame = 0;
 static bool g_d2d_spike = false;
 static D2DContext g_d2d_ctx;
 
-// Toggles the Direct2D spike view at runtime (F4). Lazily creates the
-// device-independent factories on first enable so the GDI-only path stays
-// completely untouched for anyone who never presses the hotkey. A failed
-// create leaves g_d2d_spike false rather than tearing anything down.
+// Toggles the Direct2D spike view at runtime (F4). Factories are created
+// unconditionally at startup, so this is a plain flag flip.
 static void toggle_d2d_spike() {
-    if (!g_d2d_spike && !g_d2d_ctx.factory) {
-        if (!g_d2d_ctx.create_device_independent_resources()) {
-            return;
-        }
-    }
     g_d2d_spike = !g_d2d_spike;
+}
+
+// Begins a Direct2D frame: lazily (re)creates device resources and the
+// AssetManager's device bitmaps (both are dropped together on device loss),
+// then clears to black. Returns false if the device isn't available.
+static bool begin_d2d_frame(HWND hwnd) {
+    if (!g_d2d_ctx.render_target) {
+        if (!g_d2d_ctx.create_device_resources(hwnd)) return false;
+        if (g_assets) g_assets->create_device_bitmaps(g_d2d_ctx);
+    }
+    g_d2d_ctx.render_target->BeginDraw();
+    g_d2d_ctx.render_target->Clear(D2D1::ColorF(D2D1::ColorF::Black));
+    return true;
+}
+
+static void end_d2d_frame() {
+    HRESULT hr = g_d2d_ctx.render_target->EndDraw();
+    if (hr == D2DERR_RECREATE_TARGET) {
+        // Device lost: drop everything device-dependent; the next
+        // begin_d2d_frame recreates the target and re-decodes the bitmaps.
+        g_d2d_ctx.discard_device_resources();
+        if (g_assets) g_assets->release_device_bitmaps();
+    }
 }
 
 static bool g_show_hitboxes = false;
@@ -806,13 +822,15 @@ static void handle_gallery_input() {
     clear_edge_triggers();
 }
 
-static void render_gallery(HDC hdc, int w, int h) {
+// Gallery mode renders through Direct2D (first mode cut over in the D2D
+// migration). The stateful GDI SetTextAlign(TA_CENTER) pattern becomes the
+// explicit `centered` parameter on d2d_draw_text.
+static void render_gallery(int w, int h) {
     if (g_gallery_sheet_index < 0 || !g_assets ||
-        !g_assets->has(static_cast<SheetId>(g_gallery_sheet_index))) {
-        SetTextAlign(hdc, TA_CENTER | TA_TOP);
-        draw_text(hdc, w / 2, h / 2 - 30, "No assets loaded", kTextMain, 18);
-        draw_text(hdc, w / 2, h / 2, "Esc quit", kTextDim, 12);
-        SetTextAlign(hdc, TA_LEFT | TA_TOP);
+        !g_assets->d2d_bitmap(static_cast<SheetId>(g_gallery_sheet_index))) {
+        d2d_draw_text(g_d2d_ctx, w / 2, h / 2 - 30, "No assets loaded",
+                      kTextMain, 18, true);
+        d2d_draw_text(g_d2d_ctx, w / 2, h / 2, "Esc quit", kTextDim, 12, true);
         return;
     }
 
@@ -824,19 +842,14 @@ static void render_gallery(HDC hdc, int w, int h) {
     snprintf(header, sizeof(header),
              "Sheet: %s | Grid %dx%d | Frame %d/%d",
              name.c_str(), s.columns, s.rows, g_gallery_frame, s.frames);
+    d2d_draw_text(g_d2d_ctx, w / 2, 20, header, kTextMain, 16, true);
 
-    SetTextAlign(hdc, TA_CENTER | TA_TOP);
-    draw_text(hdc, w / 2, 20, header, kTextMain, 16);
-    SetTextAlign(hdc, TA_LEFT | TA_TOP);
-
-    Gdiplus::Bitmap* bmp = g_assets->get(sheet);
+    SIZE sz = g_assets->sheet_size(sheet);
     int dest_w = 320;
     int dest_h = 320;
-    if (bmp) {
-        int img_w = static_cast<int>(bmp->GetWidth());
-        int img_h = static_cast<int>(bmp->GetHeight());
-        double cell_w = static_cast<double>(img_w) / s.columns;
-        double cell_h = static_cast<double>(img_h) / s.rows;
+    if (sz.cx > 0 && sz.cy > 0) {
+        double cell_w = static_cast<double>(sz.cx) / s.columns;
+        double cell_h = static_cast<double>(sz.cy) / s.rows;
         double cell_max = std::max(cell_w, cell_h);
         if (cell_max > 0.0) {
             double scale = std::min(static_cast<double>(w), static_cast<double>(h)) * 0.5 / cell_max;
@@ -847,22 +860,21 @@ static void render_gallery(HDC hdc, int w, int h) {
 
     int cx = w / 2;
     int cy = (h * 3) / 5;
-    (void)g_assets->draw_sprite(hdc, sheet, g_gallery_frame, cx, cy, dest_w, dest_h,
-                                0.0f, 1.0f);
+    (void)g_assets->draw_sprite(g_d2d_ctx, sheet, g_gallery_frame, cx, cy,
+                                dest_w, dest_h, 0.0f, 1.0f);
 
     int left = cx - dest_w / 2;
     int top = cy - dest_h / 2;
     int right = cx + dest_w / 2;
     int bottom = cy + dest_h / 2;
-    draw_line(hdc, left, top, right, top, RGB(255, 255, 255), 1);
-    draw_line(hdc, right, top, right, bottom, RGB(255, 255, 255), 1);
-    draw_line(hdc, right, bottom, left, bottom, RGB(255, 255, 255), 1);
-    draw_line(hdc, left, bottom, left, top, RGB(255, 255, 255), 1);
+    d2d_draw_line(g_d2d_ctx, left, top, right, top, RGB(255, 255, 255), 1);
+    d2d_draw_line(g_d2d_ctx, right, top, right, bottom, RGB(255, 255, 255), 1);
+    d2d_draw_line(g_d2d_ctx, right, bottom, left, bottom, RGB(255, 255, 255), 1);
+    d2d_draw_line(g_d2d_ctx, left, bottom, left, top, RGB(255, 255, 255), 1);
 
-    SetTextAlign(hdc, TA_CENTER | TA_TOP);
-    draw_text(hdc, w / 2, h - 40,
-              "Up/Down: sheet   Left/Right: frame   Esc: quit", kTextDim, 12);
-    SetTextAlign(hdc, TA_LEFT | TA_TOP);
+    d2d_draw_text(g_d2d_ctx, w / 2, h - 40,
+                  "Up/Down: sheet   Left/Right: frame   Esc: quit", kTextDim,
+                  12, true);
 }
 
 static void render_hitbox_overlay(HDC hdc, int court_x, int court_y, int court_width,
@@ -958,6 +970,14 @@ static void render(HWND hwnd) {
         return;
     }
 
+    if (g_gallery_mode) {
+        if (begin_d2d_frame(hwnd)) {
+            render_gallery(w, h);
+            end_d2d_frame();
+        }
+        return;
+    }
+
     HDC hdc_win = GetDC(hwnd);
     HDC hdc = CreateCompatibleDC(hdc_win);
     HBITMAP bmp = CreateCompatibleBitmap(hdc_win, w, h);
@@ -968,8 +988,6 @@ static void render(HWND hwnd) {
 
     if (g_setup_mode) {
         render_setup(hdc, w, h);
-    } else if (g_gallery_mode) {
-        render_gallery(hdc, w, h);
     } else {
         int sidebar_x = w - kSidebarWidth - kCourtPadding;
         int sidebar_y = kCourtPadding;
@@ -1233,13 +1251,13 @@ int viewer_main(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         return 1;
     }
 
-    if (g_d2d_spike) {
-        if (!g_d2d_ctx.create_device_independent_resources()) {
-            MessageBoxA(nullptr, "Direct2D initialization failed", "Pulse Court",
-                        MB_OK | MB_ICONERROR);
-            CoUninitialize();
-            return 1;
-        }
+    // D2D factories are created unconditionally: gallery mode renders via
+    // Direct2D (setup/gameplay cut over in later migration bricks).
+    if (!g_d2d_ctx.create_device_independent_resources()) {
+        MessageBoxA(nullptr, "Direct2D initialization failed", "Pulse Court",
+                    MB_OK | MB_ICONERROR);
+        CoUninitialize();
+        return 1;
     }
 
     Gdiplus::GdiplusStartupInput gdiplus_input;

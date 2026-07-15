@@ -338,6 +338,38 @@ Gdiplus::Bitmap* AssetManager::get(SheetId id) const {
     return bitmaps_[static_cast<std::size_t>(id)].get();
 }
 
+bool AssetManager::create_device_bitmaps(D2DContext& ctx) {
+    bool all_ok = true;
+    for (std::size_t i = 0; i < static_cast<std::size_t>(SheetId::Count); ++i) {
+        if (d2d_bitmaps_[i]) continue;
+        std::filesystem::path path = assets_dir_ / kSheets[i].filename;
+        if (!std::filesystem::exists(path)) continue;
+        d2d_bitmaps_[i] = ctx.load_bitmap_from_file(path.wstring());
+        if (!d2d_bitmaps_[i]) {
+            all_ok = false;
+            continue;
+        }
+        D2D1_SIZE_F sz = d2d_bitmaps_[i]->GetSize();
+        sheet_sizes_[i].cx = static_cast<LONG>(sz.width);
+        sheet_sizes_[i].cy = static_cast<LONG>(sz.height);
+    }
+    return all_ok;
+}
+
+void AssetManager::release_device_bitmaps() {
+    for (auto& bmp : d2d_bitmaps_) {
+        bmp.Reset();
+    }
+}
+
+ID2D1Bitmap* AssetManager::d2d_bitmap(SheetId id) const {
+    return d2d_bitmaps_[static_cast<std::size_t>(id)].Get();
+}
+
+SIZE AssetManager::sheet_size(SheetId id) const {
+    return sheet_sizes_[static_cast<std::size_t>(id)];
+}
+
 const std::string& AssetManager::fallback_status() const {
     return fallback_status_;
 }
@@ -414,6 +446,60 @@ bool AssetManager::draw_sprite(HDC hdc, SheetId id, int frame, int center_x,
     gfx.DrawImage(bmp, dest, src_x, src_y, src_w, src_h, Gdiplus::UnitPixel,
                   attr, nullptr, nullptr);
     gfx.Flush(Gdiplus::FlushIntentionFlush);
+    return true;
+}
+
+bool AssetManager::draw_sprite(D2DContext& ctx, SheetId id, int frame,
+                               int center_x, int center_y, int dest_w,
+                               int dest_h, float angle_deg, float alpha,
+                               float anchor_y) const {
+    ID2D1Bitmap* bmp = d2d_bitmap(id);
+    if (!bmp || !ctx.render_target) return false;
+
+    const SheetInfo& s = info(id);
+    if (frame < 0) frame = 0;
+    if (frame >= s.frames) frame = s.frames - 1;
+
+    int col = frame % s.columns;
+    int row = frame / s.columns;
+    SIZE sz = sheet_size(id);
+    int img_w = sz.cx;
+    int img_h = sz.cy;
+
+    int src_x = (col * img_w) / s.columns;
+    int src_y = (row * img_h) / s.rows;
+    int src_w = ((col + 1) * img_w) / s.columns - src_x;
+    int src_h = ((row + 1) * img_h) / s.rows - src_y;
+
+    // Half-texel inset: LINEAR sampling can read texels adjacent to the
+    // source rect, bleeding slivers of neighboring sheet frames onto tile
+    // edges. Inset only multi-frame sheets so single-image sheets (arena)
+    // still sample their true edges.
+    float inset = (s.frames > 1) ? 0.5f : 0.0f;
+    D2D1_RECT_F src = D2D1::RectF(
+        static_cast<float>(src_x) + inset, static_cast<float>(src_y) + inset,
+        static_cast<float>(src_x + src_w) - inset,
+        static_cast<float>(src_y + src_h) - inset);
+
+    D2D1_RECT_F dest = D2D1::RectF(
+        static_cast<float>(center_x - dest_w / 2),
+        static_cast<float>(center_y) - dest_h * anchor_y,
+        static_cast<float>(center_x - dest_w / 2 + dest_w),
+        static_cast<float>(center_y) - dest_h * anchor_y + dest_h);
+
+    // The render target is persistent (unlike a per-call Gdiplus::Graphics),
+    // so a rotation transform MUST be restored to identity before returning
+    // or every subsequent draw inherits it.
+    if (angle_deg != 0.0f) {
+        ctx.render_target->SetTransform(D2D1::Matrix3x2F::Rotation(
+            angle_deg, D2D1::Point2F(static_cast<float>(center_x),
+                                     static_cast<float>(center_y))));
+    }
+    ctx.render_target->DrawBitmap(bmp, dest, alpha,
+                                  D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, src);
+    if (angle_deg != 0.0f) {
+        ctx.render_target->SetTransform(D2D1::Matrix3x2F::Identity());
+    }
     return true;
 }
 
