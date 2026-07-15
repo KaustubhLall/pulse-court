@@ -632,12 +632,16 @@ static void render_footer(HDC hdc, int x, int y) {
               kTextDim, 12);
 }
 
-static void render_setup(HDC hdc, int w, int h) {
+// Setup screen renders through Direct2D (cut over in migration Task 4).
+// Layout and hit-test math are unchanged; SetDpi(96,96) on the render target
+// keeps D2D coordinates identical to the client-rect pixels the mouse
+// handling in handle_setup_input still uses.
+static void render_setup(int w, int h) {
     RECT bg = {0, 0, w, h};
-    draw_rect(hdc, bg, kPanelBackground, kPanelBackground);
+    d2d_draw_rect(g_d2d_ctx, bg, kPanelBackground, kPanelBackground);
 
-    draw_text(hdc, w / 2 - 70, 20, "Pulse Court - Character Selection",
-              kTextMain, 18);
+    d2d_draw_text(g_d2d_ctx, w / 2 - 70, 20, "Pulse Court - Character Selection",
+                  kTextMain, 18);
 
     const char* hero_names[3] = {"Kite", "Vale", "Bastion"};
     Character hero_chars[3] = {Character::Kite, Character::Vale, Character::Bastion};
@@ -655,7 +659,7 @@ static void render_setup(HDC hdc, int w, int h) {
     for (int player = 0; player < 2; ++player) {
         const char* label = (player == 0) ? "Player 1" : "Player 2";
         int label_y = start_y + player * (card_h + row_gap) - 24;
-        draw_text(hdc, start_x, label_y, label, kTextMain, 14);
+        d2d_draw_text(g_d2d_ctx, start_x, label_y, label, kTextMain, 14);
 
         for (int i = 0; i < 3; ++i) {
             int cx = start_x + i * (card_w + kCardSpacing);
@@ -675,27 +679,28 @@ static void render_setup(HDC hdc, int w, int h) {
                 border = RGB(255, 255, 0);
             }
 
-            draw_rect(hdc, card, fill, border);
+            d2d_draw_rect(g_d2d_ctx, card, fill, border);
 
             int portrait_size = 80;
             int px = cx + card_w / 2;
             int py = cy + 80;
-            if (!g_assets || !g_assets->draw_sprite(hdc, hero_idle_sheets[i], 8, px, py,
-                                                    portrait_size, portrait_size,
-                                                    0.0f, 1.0f)) {
-                draw_circle(hdc, px, py, portrait_size / 2,
-                            (i == 0) ? kPlayer1Color : (i == 1) ? kTextDim : kPlayer2Color,
-                            RGB(240, 240, 240));
+            if (!g_assets ||
+                !g_assets->draw_sprite(g_d2d_ctx, hero_idle_sheets[i], 8, px, py,
+                                       portrait_size, portrait_size, 0.0f,
+                                       1.0f)) {
+                d2d_draw_circle(g_d2d_ctx, px, py, portrait_size / 2,
+                                (i == 0) ? kPlayer1Color : (i == 1) ? kTextDim : kPlayer2Color,
+                                RGB(240, 240, 240));
             }
 
             if (g_assets) {
-                (void)g_assets->draw_sprite(hdc, SheetId::AbilityIcons, i,
+                (void)g_assets->draw_sprite(g_d2d_ctx, SheetId::AbilityIcons, i,
                                             cx + card_w - 24, cy + 24, 24, 24,
                                             0.0f, 1.0f);
             }
 
-            draw_text(hdc, cx + card_w / 2 - 15, cy + card_h - 28, hero_names[i],
-                      kTextMain, 14);
+            d2d_draw_text(g_d2d_ctx, cx + card_w / 2 - 15, cy + card_h - 28,
+                          hero_names[i], kTextMain, 14);
         }
     }
 
@@ -704,12 +709,13 @@ static void render_setup(HDC hdc, int w, int h) {
     int btn_x = (w - btn_w) / 2;
     int btn_y = h - 90;
     RECT btn = {btn_x, btn_y, btn_x + btn_w, btn_y + btn_h};
-    draw_rect(hdc, btn, kPlayer1Color, kTextMain);
-    draw_text(hdc, btn_x + 32, btn_y + 10, "Start Match", kTextMain, 14);
+    d2d_draw_rect(g_d2d_ctx, btn, kPlayer1Color, kTextMain);
+    d2d_draw_text(g_d2d_ctx, btn_x + 32, btn_y + 10, "Start Match", kTextMain,
+                  14);
 
-    draw_text(hdc, w / 2 - 140, h - 34,
-              "Tab switch player  Left/Right select  Enter start  Esc quit  F4 D2D spike",
-              kTextDim, 12);
+    d2d_draw_text(g_d2d_ctx, w / 2 - 140, h - 34,
+                  "Tab switch player  Left/Right select  Enter start  Esc quit  F4 D2D spike",
+                  kTextDim, 12);
 }
 
 static void handle_setup_input() {
@@ -970,9 +976,13 @@ static void render(HWND hwnd) {
         return;
     }
 
-    if (g_gallery_mode) {
+    if (g_gallery_mode || g_setup_mode) {
         if (begin_d2d_frame(hwnd)) {
-            render_gallery(w, h);
+            if (g_gallery_mode) {
+                render_gallery(w, h);
+            } else {
+                render_setup(w, h);
+            }
             end_d2d_frame();
         }
         return;
@@ -986,9 +996,7 @@ static void render(HWND hwnd) {
     RECT bg = {0, 0, w, h};
     FillRect(hdc, &bg, static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)));
 
-    if (g_setup_mode) {
-        render_setup(hdc, w, h);
-    } else {
+    {
         int sidebar_x = w - kSidebarWidth - kCourtPadding;
         int sidebar_y = kCourtPadding;
         int sidebar_w = kSidebarWidth;

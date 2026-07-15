@@ -206,6 +206,35 @@ void d2d_draw_text(D2DContext& ctx, int x, int y, const char* text,
         ctx.brush.Get(), D2D1_DRAW_TEXT_OPTIONS_NONE);
 }
 
+void d2d_draw_rect(D2DContext& ctx, RECT rc, COLORREF fill, COLORREF stroke) {
+    if (!ctx.render_target || !ctx.brush) return;
+    D2D1_RECT_F r = D2D1::RectF(
+        static_cast<float>(rc.left), static_cast<float>(rc.top),
+        static_cast<float>(rc.right), static_cast<float>(rc.bottom));
+    ctx.brush->SetOpacity(1.0f);
+    ctx.brush->SetColor(colorref_to_colorf(fill));
+    ctx.render_target->FillRectangle(r, ctx.brush.Get());
+    ctx.brush->SetColor(colorref_to_colorf(stroke));
+    // Inset by half a pixel so the 1px antialiased stroke covers whole pixels
+    // like the legacy GDI Rectangle pen did.
+    D2D1_RECT_F border = D2D1::RectF(r.left + 0.5f, r.top + 0.5f,
+                                     r.right - 0.5f, r.bottom - 0.5f);
+    ctx.render_target->DrawRectangle(border, ctx.brush.Get(), 1.0f);
+}
+
+void d2d_draw_circle(D2DContext& ctx, int x, int y, int r, COLORREF fill,
+                     COLORREF stroke) {
+    if (!ctx.render_target || !ctx.brush) return;
+    D2D1_ELLIPSE e = D2D1::Ellipse(
+        D2D1::Point2F(static_cast<float>(x), static_cast<float>(y)),
+        static_cast<float>(r), static_cast<float>(r));
+    ctx.brush->SetOpacity(1.0f);
+    ctx.brush->SetColor(colorref_to_colorf(fill));
+    ctx.render_target->FillEllipse(e, ctx.brush.Get());
+    ctx.brush->SetColor(colorref_to_colorf(stroke));
+    ctx.render_target->DrawEllipse(e, ctx.brush.Get(), 2.0f);
+}
+
 void render_d2d_spike(HWND hwnd, D2DContext& ctx) {
     if (!ctx.render_target) {
         if (!ctx.create_device_resources(hwnd)) {

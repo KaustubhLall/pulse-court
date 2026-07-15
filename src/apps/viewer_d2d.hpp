@@ -45,6 +45,10 @@ void d2d_draw_line(D2DContext& ctx, int x1, int y1, int x2, int y2,
                    COLORREF color, int width = 2);
 void d2d_draw_text(D2DContext& ctx, int x, int y, const char* text,
                    COLORREF color, int height = 14, bool centered = false);
+void d2d_draw_rect(D2DContext& ctx, RECT rc, COLORREF fill,
+                   COLORREF stroke = RGB(0, 0, 0));
+void d2d_draw_circle(D2DContext& ctx, int x, int y, int r, COLORREF fill,
+                     COLORREF stroke);
 
 void render_d2d_spike(HWND hwnd, D2DContext& ctx);
 
