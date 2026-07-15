@@ -103,6 +103,19 @@ static int g_gallery_frame = 0;
 static bool g_d2d_spike = false;
 static D2DContext g_d2d_ctx;
 
+// Toggles the Direct2D spike view at runtime (F4). Lazily creates the
+// device-independent factories on first enable so the GDI-only path stays
+// completely untouched for anyone who never presses the hotkey. A failed
+// create leaves g_d2d_spike false rather than tearing anything down.
+static void toggle_d2d_spike() {
+    if (!g_d2d_spike && !g_d2d_ctx.factory) {
+        if (!g_d2d_ctx.create_device_independent_resources()) {
+            return;
+        }
+    }
+    g_d2d_spike = !g_d2d_spike;
+}
+
 static bool g_show_hitboxes = false;
 static bool g_show_anim_debug = false;
 static bool g_pseudo3d = false;
@@ -251,6 +264,10 @@ static void poll_fps_hotkeys() {
     if (g_key_pressed[VK_OEM_PLUS]) {
         g_render_fps_step = (g_render_fps_step + 1) % kRenderFpsOptionCount;
         g_key_pressed[VK_OEM_PLUS] = false;
+    }
+    if (g_key_pressed[VK_F4]) {
+        toggle_d2d_spike();
+        g_key_pressed[VK_F4] = false;
     }
 }
 
@@ -675,7 +692,7 @@ static void render_setup(HDC hdc, int w, int h) {
     draw_text(hdc, btn_x + 32, btn_y + 10, "Start Match", kTextMain, 14);
 
     draw_text(hdc, w / 2 - 140, h - 34,
-              "Tab switch player  Left/Right select  Enter start  Esc quit",
+              "Tab switch player  Left/Right select  Enter start  Esc quit  F4 D2D spike",
               kTextDim, 12);
 }
 
@@ -1107,7 +1124,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
             }
             return 0;
         case WM_SIZE:
-            if (g_d2d_spike && g_d2d_ctx.render_target) {
+            // Guarded on render_target existing (not g_d2d_spike) so a
+            // resize while temporarily toggled off doesn't leave a
+            // stale-sized target for the next F4 re-enable.
+            if (g_d2d_ctx.render_target) {
                 UINT width = LOWORD(lparam);
                 UINT height = HIWORD(lparam);
                 if (width > 0 && height > 0) {

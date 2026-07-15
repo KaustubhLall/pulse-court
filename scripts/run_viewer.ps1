@@ -23,6 +23,12 @@
 
 .PARAMETER Right
     Direct character selection for player 2 (kite, vale, bastion).
+
+.PARAMETER D2D
+    Launch with the Direct2D spike flag (--d2d-spike). Short-circuits
+    render() into drawing one sprite via Direct2D instead of the normal GDI
+    path; see docs/d2d-migration-plan.md and AGENTS.md for status. Combine
+    with -Monitor/-Passive as needed.
 #>
 [CmdletBinding()]
 param(
@@ -38,7 +44,10 @@ param(
 
     [Parameter()]
     [ValidateSet("kite", "vale", "bastion", "Kite", "Vale", "Bastion")]
-    [string]$Right = $null
+    [string]$Right = $null,
+
+    [Parameter()]
+    [switch]$D2D
 )
 
 $ErrorActionPreference = 'Stop'
@@ -80,6 +89,10 @@ if ($Monitor) {
 
 if ($Passive) {
     $argList += '--passive'
+}
+
+if ($D2D) {
+    $argList += '--d2d-spike'
 }
 
 Write-Host "Launching Pulse Court..." -ForegroundColor Green
