@@ -8,6 +8,7 @@
 #include "challenge_session.hpp"
 #include "challenge_cli.hpp"
 #include "pulse_policy.hpp"
+#include "pulse_replay.hpp"
 
 #include <windows.h>
 
@@ -103,6 +104,15 @@ static std::array<std::uint8_t, 2> g_pending_buttons = {};
 static bool g_gallery_mode = false;
 static int g_gallery_sheet_index = -1;
 static int g_gallery_frame = 0;
+
+// Replay playback mode state.
+static bool g_replay_mode = false;
+static Replay g_replay_storage;
+static std::size_t g_replay_cursor = 0;
+static double g_replay_speed = 1.0;
+static bool g_replay_paused = false;
+static bool g_replay_diverged = false;
+static std::uint32_t g_replay_diverge_tick = 0;
 
 static bool g_d2d_spike = false;
 static D2DContext g_d2d_ctx;
@@ -292,12 +302,12 @@ static void format_fps_cap(char* buf, std::size_t n) {
 // clears the two keys it consumes since not every mode's input handler does
 // a blanket edge-trigger clear.
 static void poll_fps_hotkeys() {
-    if (g_key_pressed[VK_OEM_MINUS]) {
+    if (!g_replay_mode && g_key_pressed[VK_OEM_MINUS]) {
         g_render_fps_step =
             (g_render_fps_step - 1 + kRenderFpsOptionCount) % kRenderFpsOptionCount;
         g_key_pressed[VK_OEM_MINUS] = false;
     }
-    if (g_key_pressed[VK_OEM_PLUS]) {
+    if (!g_replay_mode && g_key_pressed[VK_OEM_PLUS]) {
         g_render_fps_step = (g_render_fps_step + 1) % kRenderFpsOptionCount;
         g_key_pressed[VK_OEM_PLUS] = false;
     }
@@ -374,6 +384,31 @@ static void poll_input() {
     }
 
     clear_edge_triggers();
+}
+
+// Handles input for --replay playback mode. Bypasses poll_input() entirely
+// so gameplay keys (WASD/strike/ability/dash) and bot input never leak into
+// a replay. Consumed edge-triggered keys are cleared explicitly here;
+// clear_edge_triggers() is still called by the caller afterward for the rest.
+static void handle_replay_input() {
+    if (g_key_pressed[VK_SPACE]) {
+        g_replay_paused = !g_replay_paused;
+        g_key_pressed[VK_SPACE] = false;
+    }
+    if (g_replay_paused && g_key_pressed[VK_RIGHT]) {
+        g_step_requested = true;
+        g_key_pressed[VK_RIGHT] = false;
+    }
+    if (g_key_pressed[VK_OEM_PLUS]) {
+        g_replay_speed = std::min(4.0, g_replay_speed * 2.0);
+        g_key_pressed[VK_OEM_PLUS] = false;
+    }
+    if (g_key_pressed[VK_OEM_MINUS]) {
+        g_replay_speed = std::max(0.25, g_replay_speed / 2.0);
+        g_key_pressed[VK_OEM_MINUS] = false;
+    }
+    if (g_key_pressed['R']) g_reset_requested = true;
+    if (g_key_pressed[VK_ESCAPE]) g_quit_requested = true;
 }
 
 static FrameInput compute_bot_input(const GameState& state) {
@@ -645,6 +680,24 @@ static void render_footer(HDC hdc, int x, int y) {
         }
         draw_text(hdc, x, yy, monitor, kTextDim, 12);
         yy += 14;
+    }
+
+    if (g_replay_mode) {
+        char replay_buf[160];
+        int written = snprintf(replay_buf, sizeof(replay_buf),
+                 "REPLAY %zu/%zu | speed x%.2f | %s",
+                 g_replay_cursor, g_replay_storage.ticks.size(), g_replay_speed,
+                 g_replay_paused ? "PAUSED" : "PLAYING");
+        if (g_replay_diverged && written > 0 &&
+            static_cast<std::size_t>(written) < sizeof(replay_buf)) {
+            snprintf(replay_buf + written, sizeof(replay_buf) - written,
+                     " | DIVERGED@t%u", g_replay_diverge_tick);
+        }
+        draw_text(hdc, x, yy, replay_buf, kTextMain, 12);
+        yy += 14;
+        draw_text(hdc, x, yy, "Space pause  Right step  +/- speed  R restart  Esc quit",
+                  kTextDim, 12);
+        return;
     }
 
     draw_text(hdc, x, yy,
@@ -1206,6 +1259,7 @@ int viewer_main(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     bool left_set = false;
     bool right_set = false;
     g_setup_mode = false;
+    std::string replay_path;
 
     // Parse challenge args first
     ChallengeViewerArgs challenge_args = parse_challenge_viewer_args(argc, const_cast<const wchar_t**>(argv));
@@ -1249,11 +1303,38 @@ int viewer_main(HINSTANCE hInstance, HINSTANCE hPrevInstance,
             g_monitor_name = argv[++i];
             g_monitor_name_narrow = narrow_arg(g_monitor_name.c_str());
             g_use_monitor_placement = true;
+        } else if (arg == "--replay" && i + 1 < argc) {
+            g_replay_mode = true;
+            replay_path = narrow_arg(argv[++i]);
         }
     }
     LocalFree(argv);
 
-    if (g_gallery_mode) {
+    if (g_replay_mode && (g_gallery_mode || g_setup_mode)) {
+        const char* msg =
+            "--replay is mutually exclusive with --gallery and --setup";
+        if (AttachConsole(ATTACH_PARENT_PROCESS)) {
+            fprintf(stderr, "%s\n", msg);
+        }
+        MessageBoxA(nullptr, msg, "Pulse Court", MB_OK | MB_ICONERROR);
+        return 1;
+    }
+
+    if (g_replay_mode) {
+        g_setup_mode = false;
+        std::string err;
+        if (!load_replay(replay_path, g_replay_storage, err)) {
+            std::string msg = "Failed to load replay \"" + replay_path +
+                              "\": " + err;
+            if (AttachConsole(ATTACH_PARENT_PROCESS)) {
+                fprintf(stderr, "%s\n", msg.c_str());
+            }
+            MessageBoxA(nullptr, msg.c_str(), "Pulse Court",
+                       MB_OK | MB_ICONERROR);
+            return 1;
+        }
+        g_chars = g_replay_storage.characters;
+    } else if (g_gallery_mode) {
         g_setup_mode = false;
     } else if (!left_set || !right_set) {
         g_setup_mode = true;
@@ -1375,7 +1456,9 @@ int viewer_main(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     }
 
     DWORD ex_style = g_passive ? WS_EX_NOACTIVATE : 0;
-    const wchar_t* window_title = g_gallery_mode ? L"Pulse Court - Gallery" : L"Pulse Court";
+    const wchar_t* window_title = g_gallery_mode
+        ? L"Pulse Court - Gallery"
+        : (g_replay_mode ? L"Pulse Court - Replay" : L"Pulse Court");
     g_hwnd = CreateWindowExW(
         ex_style, kClassName, window_title, WS_OVERLAPPEDWINDOW, window_x,
         window_y, window_width, window_height, nullptr, nullptr, hInstance,
@@ -1389,7 +1472,9 @@ int viewer_main(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     ShowWindow(g_hwnd, g_passive ? SW_SHOWNOACTIVATE : nCmdShow);
     UpdateWindow(g_hwnd);
 
-    Simulation sim(g_chars);
+    Simulation sim = g_replay_mode ? Simulation(g_replay_storage.characters,
+                                                g_replay_storage.config)
+                                   : Simulation(g_chars);
     g_sim = &sim;
     g_anim.reset(g_chars);
 
@@ -1397,6 +1482,9 @@ int viewer_main(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     g_render_accumulated_time = 0.0;
     g_manual_pause = false;
     g_reset_requested = false;
+    g_replay_cursor = 0;
+    g_replay_diverged = false;
+    g_replay_diverge_tick = 0;
 
     auto last_time = std::chrono::steady_clock::now();
 
@@ -1445,6 +1533,73 @@ int viewer_main(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                 clear_edge_triggers();
                 continue;
             }
+            render_throttled(delta);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            continue;
+        }
+
+        if (g_replay_mode) {
+            if (g_reset_requested) {
+                sim.reset(g_chars);
+                g_anim.reset(g_chars);
+                g_trace.clear();
+                g_reset_requested = false;
+                g_accumulated_time = 0.0;
+                g_render_accumulated_time = 0.0;
+                g_replay_cursor = 0;
+                g_replay_diverged = false;
+                g_replay_diverge_tick = 0;
+                g_replay_paused = false;
+                g_step_requested = false;
+                clear_edge_triggers();
+                render_throttled(delta);
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                continue;
+            }
+
+            handle_replay_input();
+            clear_edge_triggers();
+
+            const std::size_t total_ticks = g_replay_storage.ticks.size();
+
+            auto step_replay_tick = [&]() {
+                if (g_replay_cursor >= total_ticks) {
+                    g_replay_paused = true;
+                    return;
+                }
+                const RecordedTick& rec = g_replay_storage.ticks[g_replay_cursor];
+                advance_tick(sim, rec.inputs);
+                if (!g_replay_diverged &&
+                    sim.state_hash() != rec.expected_hash) {
+                    g_replay_diverged = true;
+                    // 0-based tick index, matching verify_replay's convention
+                    g_replay_diverge_tick =
+                        static_cast<std::uint32_t>(g_replay_cursor);
+                    char buf[96];
+                    snprintf(buf, sizeof(buf), "t%u: REPLAY DIVERGED",
+                             g_replay_diverge_tick);
+                    add_trace_entry(static_cast<std::int32_t>(g_replay_diverge_tick),
+                                    buf, kTextMain);
+                }
+                ++g_replay_cursor;
+                if (g_replay_cursor >= total_ticks) {
+                    g_replay_paused = true;
+                }
+            };
+
+            if (!g_replay_paused) {
+                g_accumulated_time += delta * g_replay_speed;
+                while (g_accumulated_time >= kSimDt) {
+                    step_replay_tick();
+                    g_accumulated_time -= kSimDt;
+                }
+            }
+
+            if (g_step_requested) {
+                step_replay_tick();
+                g_step_requested = false;
+            }
+
             render_throttled(delta);
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
             continue;

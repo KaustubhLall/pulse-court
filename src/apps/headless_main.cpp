@@ -2,6 +2,7 @@
 #include "pulse_sim.hpp"
 #include "challenge_session.hpp"
 #include "challenge_cli.hpp"
+#include "challenge_smoke.hpp"
 #include "pulse_policy.hpp"
 
 #include <chrono>
@@ -16,43 +17,6 @@
 namespace pulse {
 
 namespace {
-
-std::pair<std::int8_t, std::int8_t> decode_script_dir(std::int32_t d) {
-    switch (d % 9) {
-        case 0: return {0, 0};
-        case 1: return {0, 1};
-        case 2: return {0, -1};
-        case 3: return {-1, 0};
-        case 4: return {1, 0};
-        case 5: return {-1, 1};
-        case 6: return {1, 1};
-        case 7: return {-1, -1};
-        default: return {1, -1};
-    }
-}
-
-// Deterministic scripted input tape. No bot, no search, no model.
-FrameInput scripted_input(std::uint32_t tick, std::size_t player,
-                          Character character) {
-    (void)character;
-    std::uint32_t t = tick + static_cast<std::uint32_t>(player) * 1000u;
-    std::int32_t move = static_cast<std::int32_t>((t / 30u) % 8u) + 1;
-    auto [mx, my] = decode_script_dir(move);
-    FrameInput in;
-    in.move_x = mx;
-    in.move_y = my;
-    in.aim_x = mx;
-    in.aim_y = my;
-
-    if ((t % 120u) == 0u) {
-        in.buttons = ButtonStrike;
-    } else if ((t % 300u) == 70u) {
-        in.buttons = ButtonAbility;
-    } else if ((t % 180u) == 35u) {
-        in.buttons = ButtonDash;
-    }
-    return in;
-}
 
 void print_usage(const char* prog) {
     std::cerr << "Usage: " << prog << " [options]\n"
@@ -105,54 +69,24 @@ int main(int argc, char** argv) {
         for (std::int32_t game_idx = 0; game_idx < smoke_args.games;
              ++game_idx) {
             GameSchedule gs = session.schedule_game(game_idx);
-            std::int32_t human_seat = gs.human_seat;
-            std::int32_t bot_seat = gs.bot_seat;
-
-            MatchConfig config;
-            config.score_to_win = 1;  // explicit score-to-one for smoke
-            Simulation sim(gs.characters, config);
-            PolicyController controller(policy, bot_seat,
-                                        gs.characters[bot_seat],
-                                        gs.characters[human_seat]);
-            controller.reset(sim.state());
-
-            const std::int32_t kMaxSmokeTicks = 180 * 120;  // regulation
-            for (std::int32_t t = 0; t < kMaxSmokeTicks; ++t) {
-                std::uint32_t tick = sim.state().tick;
-                std::array<FrameInput, 2> in = {};
-                in[human_seat] = scripted_input(tick, human_seat,
-                                                gs.characters[human_seat]);
-                in[bot_seat] = controller.decide(sim.state(), tick, bot_seat);
-
-                StepResult result = sim.step(in);
-                if (result.match_finished) break;
-            }
-
-            const GameState& state = sim.state();
-            std::int8_t winner = -1;
-            if (state.score[human_seat] > state.score[bot_seat]) {
-                winner = static_cast<std::int8_t>(human_seat);
-            } else if (state.score[bot_seat] > state.score[human_seat]) {
-                winner = static_cast<std::int8_t>(bot_seat);
-            }
-
-            GameEvidence ev;
-            ev.game_index = game_idx;
-            ev.characters = gs.characters;
-            ev.human_seat = static_cast<std::int8_t>(human_seat);
-            ev.bot_seat = static_cast<std::int8_t>(bot_seat);
-            ev.winner = winner;
-            ev.human_score = state.score[human_seat];
-            ev.bot_score = state.score[bot_seat];
-            ev.final_state_hash = std::to_string(sim.state_hash());
 
             session.start_game(game_idx);
+
+            GameEvidence ev;
+            std::string error;
+            if (!run_smoke_game(policy, gs, game_idx, smoke_args.output_dir,
+                                ev, error)) {
+                std::cerr << "Replay record failed: " << error << "\n";
+                return 1;
+            }
+
             session.record_game_result(ev);
 
             std::cout << "Game " << (game_idx + 1) << ": human "
                       << static_cast<int>(ev.human_score) << " - bot "
                       << static_cast<int>(ev.bot_score)
-                      << " winner=" << static_cast<int>(winner) << "\n";
+                      << " winner=" << static_cast<int>(ev.winner)
+                      << " replay=" << ev.replay_path << "\n";
         }
 
         session.write_summary(ChallengeStatus::Complete);

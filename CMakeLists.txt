@@ -21,6 +21,7 @@ add_library(pulse_challenge
     src/ai/challenge_cli.cpp
     src/ai/pulse_ai.cpp
     src/ai/pulse_policy.cpp
+    src/ai/challenge_smoke.cpp
 )
 
 target_include_directories(pulse_challenge PUBLIC src/ai)
@@ -28,6 +29,7 @@ target_link_libraries(pulse_challenge PRIVATE pulse_core)
 
 if(MSVC)
     target_compile_options(pulse_core PRIVATE /W4 /permissive- /EHsc /Zc:__cplusplus)
+    target_compile_options(pulse_challenge PRIVATE /W4 /permissive- /EHsc /Zc:__cplusplus)
 else()
     target_compile_options(pulse_core PRIVATE -Wall -Wextra -Wpedantic -Wconversion)
 endif()

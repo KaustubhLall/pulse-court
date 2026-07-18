@@ -1,5 +1,7 @@
 #include "challenge_session.hpp"
 #include "challenge_cli.hpp"
+#include "challenge_smoke.hpp"
+#include "pulse_replay.hpp"
 #include "pulse_sim.hpp"
 #include "pulse_policy.hpp"
 
@@ -7,8 +9,11 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -629,6 +634,209 @@ void test_session_partial_summary() {
     std::cout << "test_session_partial_summary passed\n";
 }
 
+// NOTE: assert() is compiled out under NDEBUG (Release builds). Any call
+// with a side effect this file depends on must happen in a plain statement
+// first, with the boolean result stashed in a variable that assert() then
+// checks — never call a side-effecting function directly inside assert().
+
+void test_smoke_game_records_replay() {
+    Policy policy;
+    policy.checkpoint_id = "test";
+    policy.model_version = "v1.0";
+    policy.bundle_sha = "abc";
+    policy.manifest_sha = "def";
+    policy.certification_sha = "ghi";
+
+    std::filesystem::path test_dir = "test_challenge_output";
+    std::filesystem::remove_all(test_dir);
+    std::filesystem::create_directories(test_dir);
+
+    GameSchedule gs;
+    gs.characters = {Character::Kite, Character::Vale};
+    gs.human_seat = 0;
+    gs.bot_seat = 1;
+
+    GameEvidence ev;
+    std::string error;
+    bool smoke_ok = run_smoke_game(policy, gs, 0, test_dir, ev, error);
+    assert(smoke_ok);
+    (void)smoke_ok;
+    assert(error.empty());
+
+    std::filesystem::path replay_file = test_dir / "game_000.pulse";
+    assert(std::filesystem::exists(replay_file));
+    assert(std::filesystem::file_size(replay_file) > 0);
+    assert(ev.replay_path == "game_000.pulse");
+
+    Replay loaded;
+    std::string load_error;
+    bool load_ok = load_replay(replay_file.string(), loaded, load_error);
+    assert(load_ok);
+    (void)load_ok;
+    ReplayVerification v = verify_replay(loaded);
+    assert(v.ok);
+    assert(!loaded.ticks.empty());
+    assert(loaded.ticks.back().expected_hash == std::stoull(ev.final_state_hash));
+
+    std::filesystem::remove_all(test_dir);
+    std::cout << "test_smoke_game_records_replay passed\n";
+}
+
+void test_smoke_replay_path_in_games_jsonl() {
+    Policy policy;
+    policy.checkpoint_id = "test";
+    policy.model_version = "v1.0";
+    policy.bundle_sha = "abc";
+    policy.manifest_sha = "def";
+    policy.certification_sha = "ghi";
+
+    std::filesystem::path test_dir = "test_challenge_output";
+    std::filesystem::remove_all(test_dir);
+
+    ChallengeSession session(policy, test_dir, 20);
+    assert(session.valid());
+
+    GameSchedule gs = session.schedule_game(0);
+    GameEvidence ev;
+    std::string error;
+    bool smoke_ok = run_smoke_game(policy, gs, 0, test_dir, ev, error);
+    assert(smoke_ok);
+    (void)smoke_ok;
+
+    bool started = session.start_game(0);
+    assert(started);
+    (void)started;
+    session.record_game_result(ev);
+
+    std::ifstream in(test_dir / "games.jsonl");
+    assert(in.good());
+    std::string line;
+    bool found = false;
+    while (std::getline(in, line)) {
+        if (line.find("\"replay_path\":\"game_000.pulse\"") != std::string::npos) {
+            found = true;
+        }
+    }
+    in.close();
+    assert(found);
+
+    std::filesystem::remove_all(test_dir);
+    std::cout << "test_smoke_replay_path_in_games_jsonl passed\n";
+}
+
+namespace {
+
+void patch_bytes(const std::filesystem::path& path, std::size_t offset,
+                 std::uint32_t value) {
+    std::ifstream in(path, std::ios::binary);
+    std::vector<char> data((std::istreambuf_iterator<char>(in)),
+                           std::istreambuf_iterator<char>());
+    in.close();
+    assert(offset + sizeof(value) <= data.size());
+    std::memcpy(data.data() + offset, &value, sizeof(value));
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    out.write(data.data(), static_cast<std::streamsize>(data.size()));
+}
+
+}  // namespace
+
+void test_replay_version_rejection() {
+    std::filesystem::path test_dir = "test_challenge_output";
+    std::filesystem::remove_all(test_dir);
+    std::filesystem::create_directories(test_dir);
+
+    Replay replay;
+    replay.characters = {Character::Kite, Character::Vale};
+    RecordedTick rt;
+    Simulation sim(replay.characters, replay.config);
+    StepResult step_result = sim.step(rt.inputs);
+    (void)step_result;
+    rt.expected_hash = sim.state_hash();
+    replay.ticks.push_back(rt);
+
+    std::filesystem::path replay_path = test_dir / "version_test.pulse";
+    std::string error;
+    bool save_ok = save_replay(replay, replay_path.string(), error);
+    assert(save_ok);
+    (void)save_ok;
+
+    // Patch format_version at offset 8.
+    patch_bytes(replay_path, 8, 9999u);
+    Replay loaded;
+    std::string load_error;
+    bool load_ok = load_replay(replay_path.string(), loaded, load_error);
+    assert(!load_ok);
+    (void)load_ok;
+
+    // Re-save clean, patch ruleset_version at offset 12.
+    save_ok = save_replay(replay, replay_path.string(), error);
+    assert(save_ok);
+    patch_bytes(replay_path, 12, 9999u);
+    Replay loaded2;
+    std::string load_error2;
+    bool load_ok2 = load_replay(replay_path.string(), loaded2, load_error2);
+    assert(!load_ok2);
+    (void)load_ok2;
+
+    // Truncated file case.
+    save_ok = save_replay(replay, replay_path.string(), error);
+    assert(save_ok);
+    {
+        std::ifstream in(replay_path, std::ios::binary);
+        std::vector<char> data((std::istreambuf_iterator<char>(in)),
+                               std::istreambuf_iterator<char>());
+        in.close();
+        assert(data.size() > 4);
+        data.resize(data.size() - 4);
+        std::ofstream out(replay_path, std::ios::binary | std::ios::trunc);
+        out.write(data.data(), static_cast<std::streamsize>(data.size()));
+    }
+    Replay loaded3;
+    std::string load_error3;
+    bool load_ok3 = load_replay(replay_path.string(), loaded3, load_error3);
+    assert(!load_ok3);
+    (void)load_ok3;
+
+    std::filesystem::remove_all(test_dir);
+    std::cout << "test_replay_version_rejection passed\n";
+}
+
+void test_smoke_determinism() {
+    Policy policy;
+    policy.checkpoint_id = "test";
+    policy.model_version = "v1.0";
+    policy.bundle_sha = "abc";
+    policy.manifest_sha = "def";
+    policy.certification_sha = "ghi";
+
+    std::filesystem::path dir_a = "test_challenge_output_a";
+    std::filesystem::path dir_b = "test_challenge_output_b";
+    std::filesystem::remove_all(dir_a);
+    std::filesystem::remove_all(dir_b);
+    std::filesystem::create_directories(dir_a);
+    std::filesystem::create_directories(dir_b);
+
+    GameSchedule gs;
+    gs.characters = {Character::Kite, Character::Vale};
+    gs.human_seat = 0;
+    gs.bot_seat = 1;
+
+    GameEvidence ev_a, ev_b;
+    std::string error_a, error_b;
+    bool ok_a = run_smoke_game(policy, gs, 0, dir_a, ev_a, error_a);
+    assert(ok_a);
+    (void)ok_a;
+    bool ok_b = run_smoke_game(policy, gs, 0, dir_b, ev_b, error_b);
+    assert(ok_b);
+    (void)ok_b;
+
+    assert(ev_a.final_state_hash == ev_b.final_state_hash);
+
+    std::filesystem::remove_all(dir_a);
+    std::filesystem::remove_all(dir_b);
+    std::cout << "test_smoke_determinism passed\n";
+}
+
 void run_all_tests() {
     std::cout << "Running challenge tests...\n";
     test_character_name();
@@ -650,6 +858,15 @@ void run_all_tests() {
     test_policy_controller_both_seats();
     test_session_reset_discard();
     test_session_partial_summary();
+    std::cout.flush();
+    test_smoke_game_records_replay();
+    std::cout.flush();
+    test_smoke_replay_path_in_games_jsonl();
+    std::cout.flush();
+    test_replay_version_rejection();
+    std::cout.flush();
+    test_smoke_determinism();
+    std::cout.flush();
     std::cout << "All challenge tests passed!\n";
 }
 
