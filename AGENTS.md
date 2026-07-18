@@ -260,3 +260,40 @@ confirms these.
   viewer-side transforms), `B` toggle deterministic P2 bot.
 - `--gallery` launches a sprite-sheet gallery for inspecting every loaded sheet
   and frame.
+
+## Challenge / Pulse Zero deployment stack (added 2026-07-18)
+
+The `src/ai/` library implements stage 4 of the Pulse Zero phase-3 plan
+(see `build/pulse-zero-work/docs/pulse-zero-phase3-certification-deployment-plan.md`;
+that directory is a separate read-only clone holding the training pipeline —
+its `training/runs/pulse-zero-phase2/` is frozen scientific evidence, never
+write there).
+
+- `pulse_policy.{hpp,cpp}` — real PZPB bundle loader (fail-closed strict
+  `Policy::load`, non-certified `load_preview`) + FP32 MLP inference.
+  Strict load correctly FAILS on this tree today: main's core is ruleset 2,
+  certified bundles declare ruleset 4 (core merge is a known follow-up).
+  `pulse_core_compat.hpp` documents the degraded touch-kind shim.
+- `pulse_policy_devgen` + `pulse_dev_bundle.exe` — deterministic
+  NON-CERTIFIED dev bundles for structural testing only.
+- Two session classes coexist deliberately: `pulse::ChallengeSession`
+  (`challenge_session.hpp`, simple evidence logger used by headless smoke)
+  and `pulse::challenge::ChallengeSession` (`challenge_protocol.hpp`,
+  integrity/provenance protocol session used by the viewer). Consolidation
+  is a known follow-up; don't half-merge them.
+- Headless: `pulse_headless --challenge-smoke` (scripted synthetic, or
+  `--policy-bundle-preview <pzpb>` for real preview inference); records
+  per-game `.pulse` replays. Viewer: `--replay <file.pulse>` historical
+  visualizer; `--challenge` runs the 20-game protocol (strict or preview
+  bundle), append-only logs, quit-after-completion is legitimate.
+
+### Session conventions (hard-won)
+
+- Never run two MSBuild builds concurrently in the same build dir (locked
+  .tlog hangs). Orchestrating agents build centrally and serially.
+- All test mains call `pulse::test::disable_error_dialogs()`
+  (`tests/test_no_dialogs.hpp`) so Debug assert/abort failures write to
+  stderr and exit instead of hanging on a modal CRT dialog.
+- Run the Debug test suite too, not just Release: `assert(...)` around
+  side-effecting calls is a no-op under NDEBUG and has hidden real bugs
+  here twice (evidence validation, CLI argc off-by-ones).
