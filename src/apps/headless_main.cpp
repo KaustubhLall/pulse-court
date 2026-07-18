@@ -3,7 +3,7 @@
 #include "challenge_session.hpp"
 #include "challenge_cli.hpp"
 #include "challenge_smoke.hpp"
-#include "pulse_policy.hpp"
+#include "scripted_policy.hpp"
 
 #include <chrono>
 #include <cstdint>
@@ -48,7 +48,7 @@ int main(int argc, char** argv) {
         }
 
         // Create a synthetic policy for smoke testing
-        Policy policy;
+        PolicyMetadata policy;
         policy.checkpoint_id = "smoke_test_checkpoint";
         policy.model_version = "v1.0";
         policy.bundle_sha = "synthetic_bundle_sha";

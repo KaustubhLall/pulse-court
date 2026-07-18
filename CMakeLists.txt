@@ -16,11 +16,23 @@ add_library(pulse_core
 
 target_include_directories(pulse_core PUBLIC src/core)
 
+add_library(pulse_ai
+    src/ai/pulse_ai.cpp
+)
+target_include_directories(pulse_ai PUBLIC src/ai)
+target_link_libraries(pulse_ai PRIVATE pulse_core)
+
+add_library(pulse_policy
+    src/ai/pulse_policy.cpp
+    src/ai/pulse_policy_adapter.cpp
+)
+target_include_directories(pulse_policy PUBLIC src/ai)
+target_link_libraries(pulse_policy PRIVATE pulse_ai pulse_core)
+
 add_library(pulse_challenge
     src/ai/challenge_session.cpp
     src/ai/challenge_cli.cpp
-    src/ai/pulse_ai.cpp
-    src/ai/pulse_policy.cpp
+    src/ai/scripted_policy.cpp
     src/ai/challenge_smoke.cpp
 )
 
@@ -29,6 +41,8 @@ target_link_libraries(pulse_challenge PRIVATE pulse_core)
 
 if(MSVC)
     target_compile_options(pulse_core PRIVATE /W4 /permissive- /EHsc /Zc:__cplusplus)
+    target_compile_options(pulse_ai PRIVATE /W4 /permissive- /EHsc /Zc:__cplusplus)
+    target_compile_options(pulse_policy PRIVATE /W4 /permissive- /EHsc /Zc:__cplusplus)
     target_compile_options(pulse_challenge PRIVATE /W4 /permissive- /EHsc /Zc:__cplusplus)
 else()
     target_compile_options(pulse_core PRIVATE -Wall -Wextra -Wpedantic -Wconversion)
@@ -36,6 +50,12 @@ endif()
 
 add_executable(pulse_headless src/apps/headless_main.cpp)
 target_link_libraries(pulse_headless PRIVATE pulse_core pulse_challenge)
+
+add_executable(pulse_policy_verify src/apps/policy_verify_main.cpp)
+target_link_libraries(pulse_policy_verify PRIVATE pulse_policy pulse_ai pulse_core)
+if(MSVC)
+    target_compile_options(pulse_policy_verify PRIVATE /W4 /permissive- /EHsc /Zc:__cplusplus)
+endif()
 
 if(WIN32 AND PULSE_BUILD_VIEWER)
     add_executable(pulse_viewer WIN32
@@ -73,4 +93,11 @@ if(BUILD_TESTING)
         target_compile_options(pulse_challenge_tests PRIVATE /W4 /permissive- /EHsc /Zc:__cplusplus)
     endif()
     add_test(NAME pulse_challenge_tests COMMAND pulse_challenge_tests)
+
+    add_executable(pulse_policy_tests tests/policy_tests.cpp)
+    target_link_libraries(pulse_policy_tests PRIVATE pulse_policy pulse_ai pulse_core)
+    if(MSVC)
+        target_compile_options(pulse_policy_tests PRIVATE /W4 /permissive- /EHsc /Zc:__cplusplus)
+    endif()
+    add_test(NAME pulse_policy_tests COMMAND pulse_policy_tests)
 endif()

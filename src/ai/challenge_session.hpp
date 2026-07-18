@@ -54,7 +54,7 @@ struct SessionSummary {
     ChallengeStatus status;
 };
 
-struct Policy {
+struct PolicyMetadata {
     std::string checkpoint_id;
     std::string model_version;
     std::string bundle_sha;
@@ -66,7 +66,7 @@ class ChallengeSession {
 public:
     static constexpr std::int32_t kTotalGames = 20;
 
-    ChallengeSession(const Policy& policy,
+    ChallengeSession(const PolicyMetadata& policy,
                      const std::filesystem::path& log_dir,
                      std::int32_t requested_games);
 
@@ -95,7 +95,7 @@ private:
     static const char* status_string(ChallengeStatus status) noexcept;
     static std::string json_escape(const std::string& s);
 
-    Policy policy_;
+    PolicyMetadata policy_;
     std::filesystem::path log_dir_;
     std::int32_t requested_games_;
     std::vector<GameSchedule> schedule_;

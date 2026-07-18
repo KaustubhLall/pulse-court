@@ -7,7 +7,7 @@
 #include "viewer_d2d.hpp"
 #include "challenge_session.hpp"
 #include "challenge_cli.hpp"
-#include "pulse_policy.hpp"
+#include "scripted_policy.hpp"
 #include "pulse_replay.hpp"
 
 #include <windows.h>
@@ -124,7 +124,7 @@ static std::string g_challenge_manifest_path;
 static std::int32_t g_challenge_games = 0;
 static std::string g_challenge_log_dir;
 static std::unique_ptr<ChallengeSession> g_challenge_session;
-// static std::unique_ptr<PolicyController> g_challenge_controller; // TODO: implement
+// static std::unique_ptr<ScriptedPolicyController> g_challenge_controller; // TODO: implement
 static std::int32_t g_challenge_human_wins = 0;
 static std::int32_t g_challenge_bot_wins = 0;
 static std::int32_t g_challenge_current_game = -1;

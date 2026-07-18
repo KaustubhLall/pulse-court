@@ -21,7 +21,7 @@ namespace pulse {
 // Runs a single smoke game to completion (or the smoke tick cap), recording
 // a replay file to output_dir / "game_NNN.pulse" and filling out GameEvidence.
 // Returns false and sets error on failure (e.g. replay save failure).
-[[nodiscard]] bool run_smoke_game(const Policy& policy, const GameSchedule& gs,
+[[nodiscard]] bool run_smoke_game(const PolicyMetadata& policy, const GameSchedule& gs,
                                   std::int32_t game_index,
                                   const std::filesystem::path& output_dir,
                                   GameEvidence& out, std::string& error);

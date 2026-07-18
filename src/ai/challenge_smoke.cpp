@@ -1,6 +1,6 @@
 #include "challenge_smoke.hpp"
 
-#include "pulse_policy.hpp"
+#include "scripted_policy.hpp"
 #include "pulse_replay.hpp"
 
 #include <array>
@@ -48,7 +48,7 @@ FrameInput scripted_input(std::uint32_t tick, std::size_t player,
     return in;
 }
 
-bool run_smoke_game(const Policy& policy, const GameSchedule& gs,
+bool run_smoke_game(const PolicyMetadata& policy, const GameSchedule& gs,
                     std::int32_t game_index,
                     const std::filesystem::path& output_dir, GameEvidence& out,
                     std::string& error) {
@@ -58,7 +58,7 @@ bool run_smoke_game(const Policy& policy, const GameSchedule& gs,
     MatchConfig config;
     config.score_to_win = 1;  // explicit score-to-one for smoke
     Simulation sim(gs.characters, config);
-    PolicyController controller(policy, bot_seat, gs.characters[bot_seat],
+    ScriptedPolicyController controller(policy, bot_seat, gs.characters[bot_seat],
                                 gs.characters[human_seat]);
     controller.reset(sim.state());
 

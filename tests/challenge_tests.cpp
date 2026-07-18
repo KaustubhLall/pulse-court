@@ -3,7 +3,7 @@
 #include "challenge_smoke.hpp"
 #include "pulse_replay.hpp"
 #include "pulse_sim.hpp"
-#include "pulse_policy.hpp"
+#include "scripted_policy.hpp"
 
 #include <cassert>
 #include <cstddef>
@@ -29,7 +29,7 @@ void test_character_name() {
 }
 
 void test_schedule_generation() {
-    Policy policy;
+    PolicyMetadata policy;
     policy.checkpoint_id = "test_checkpoint";
     policy.model_version = "v1.0";
     policy.bundle_sha = "abc123";
@@ -81,7 +81,7 @@ void test_schedule_generation() {
 }
 
 void test_game_evidence_recording() {
-    Policy policy;
+    PolicyMetadata policy;
     policy.checkpoint_id = "test_checkpoint";
     policy.model_version = "v1.0";
     policy.bundle_sha = "abc123";
@@ -124,7 +124,7 @@ void test_game_evidence_recording() {
 }
 
 void test_gate_conditions() {
-    Policy policy;
+    PolicyMetadata policy;
     policy.checkpoint_id = "test_checkpoint";
     policy.model_version = "v1.0";
     policy.bundle_sha = "abc123";
@@ -189,7 +189,7 @@ void test_gate_conditions() {
 }
 
 void test_file_integrity() {
-    Policy policy;
+    PolicyMetadata policy;
     policy.checkpoint_id = "test_checkpoint";
     policy.model_version = "v1.0";
     policy.bundle_sha = "abc123";
@@ -231,7 +231,7 @@ void test_file_integrity() {
 }
 
 void test_new_dir_no_overwrite() {
-    Policy policy;
+    PolicyMetadata policy;
     policy.checkpoint_id = "test_checkpoint";
     policy.model_version = "v1.0";
     policy.bundle_sha = "abc123";
@@ -255,7 +255,7 @@ void test_new_dir_no_overwrite() {
 }
 
 void test_incomplete_seat_mismatch() {
-    Policy policy;
+    PolicyMetadata policy;
     policy.checkpoint_id = "test_checkpoint";
     policy.model_version = "v1.0";
     policy.bundle_sha = "abc123";
@@ -371,14 +371,14 @@ void test_cli_headless_validation() {
 }
 
 void test_policy_controller_reset() {
-    Policy policy;
+    PolicyMetadata policy;
     policy.checkpoint_id = "test";
     policy.model_version = "v1.0";
     policy.bundle_sha = "abc";
     policy.manifest_sha = "def";
     policy.certification_sha = "ghi";
 
-    PolicyController controller(policy, 0, Character::Kite, Character::Vale);
+    ScriptedPolicyController controller(policy, 0, Character::Kite, Character::Vale);
 
     // Test reset per game
     GameState state;
@@ -399,14 +399,14 @@ void test_policy_controller_reset() {
 }
 
 void test_policy_controller_decisions() {
-    Policy policy;
+    PolicyMetadata policy;
     policy.checkpoint_id = "test";
     policy.model_version = "v1.0";
     policy.bundle_sha = "abc";
     policy.manifest_sha = "def";
     policy.certification_sha = "ghi";
 
-    PolicyController controller(policy, 0, Character::Kite, Character::Vale);
+    ScriptedPolicyController controller(policy, 0, Character::Kite, Character::Vale);
 
     GameState state;
     state.tick = 0;
@@ -432,14 +432,14 @@ void test_policy_controller_decisions() {
 }
 
 void test_policy_controller_held_axes() {
-    Policy policy;
+    PolicyMetadata policy;
     policy.checkpoint_id = "test";
     policy.model_version = "v1.0";
     policy.bundle_sha = "abc";
     policy.manifest_sha = "def";
     policy.certification_sha = "ghi";
 
-    PolicyController controller(policy, 0, Character::Kite, Character::Vale);
+    ScriptedPolicyController controller(policy, 0, Character::Kite, Character::Vale);
 
     GameState state;
     state.tick = 0;
@@ -460,14 +460,14 @@ void test_policy_controller_held_axes() {
 }
 
 void test_policy_controller_one_tick_button() {
-    Policy policy;
+    PolicyMetadata policy;
     policy.checkpoint_id = "test";
     policy.model_version = "v1.0";
     policy.bundle_sha = "abc";
     policy.manifest_sha = "def";
     policy.certification_sha = "ghi";
 
-    PolicyController controller(policy, 0, Character::Kite, Character::Vale);
+    ScriptedPolicyController controller(policy, 0, Character::Kite, Character::Vale);
 
     GameState state;
     state.tick = 0;
@@ -484,14 +484,14 @@ void test_policy_controller_one_tick_button() {
 }
 
 void test_policy_controller_no_stale_button() {
-    Policy policy;
+    PolicyMetadata policy;
     policy.checkpoint_id = "test";
     policy.model_version = "v1.0";
     policy.bundle_sha = "abc";
     policy.manifest_sha = "def";
     policy.certification_sha = "ghi";
 
-    PolicyController controller(policy, 0, Character::Kite, Character::Vale);
+    ScriptedPolicyController controller(policy, 0, Character::Kite, Character::Vale);
 
     GameState state;
     state.tick = 0;
@@ -513,7 +513,7 @@ void test_policy_controller_no_stale_button() {
 }
 
 void test_policy_controller_both_seats() {
-    Policy policy;
+    PolicyMetadata policy;
     policy.checkpoint_id = "test";
     policy.model_version = "v1.0";
     policy.bundle_sha = "abc";
@@ -521,7 +521,7 @@ void test_policy_controller_both_seats() {
     policy.certification_sha = "ghi";
 
     // Test seat 0
-    PolicyController controller0(policy, 0, Character::Kite, Character::Vale);
+    ScriptedPolicyController controller0(policy, 0, Character::Kite, Character::Vale);
     GameState state0;
     state0.tick = 0;
     controller0.reset(state0);
@@ -529,7 +529,7 @@ void test_policy_controller_both_seats() {
     assert(in0.buttons == ButtonStrike);
 
     // Test seat 1
-    PolicyController controller1(policy, 1, Character::Vale, Character::Kite);
+    ScriptedPolicyController controller1(policy, 1, Character::Vale, Character::Kite);
     GameState state1;
     state1.tick = 0;
     controller1.reset(state1);
@@ -540,7 +540,7 @@ void test_policy_controller_both_seats() {
 }
 
 void test_session_reset_discard() {
-    Policy policy;
+    PolicyMetadata policy;
     policy.checkpoint_id = "test";
     policy.model_version = "v1.0";
     policy.bundle_sha = "abc";
@@ -595,7 +595,7 @@ void test_session_reset_discard() {
 }
 
 void test_session_partial_summary() {
-    Policy policy;
+    PolicyMetadata policy;
     policy.checkpoint_id = "test";
     policy.model_version = "v1.0";
     policy.bundle_sha = "abc";
@@ -640,7 +640,7 @@ void test_session_partial_summary() {
 // checks — never call a side-effecting function directly inside assert().
 
 void test_smoke_game_records_replay() {
-    Policy policy;
+    PolicyMetadata policy;
     policy.checkpoint_id = "test";
     policy.model_version = "v1.0";
     policy.bundle_sha = "abc";
@@ -683,7 +683,7 @@ void test_smoke_game_records_replay() {
 }
 
 void test_smoke_replay_path_in_games_jsonl() {
-    Policy policy;
+    PolicyMetadata policy;
     policy.checkpoint_id = "test";
     policy.model_version = "v1.0";
     policy.bundle_sha = "abc";
@@ -802,7 +802,7 @@ void test_replay_version_rejection() {
 }
 
 void test_smoke_determinism() {
-    Policy policy;
+    PolicyMetadata policy;
     policy.checkpoint_id = "test";
     policy.model_version = "v1.0";
     policy.bundle_sha = "abc";

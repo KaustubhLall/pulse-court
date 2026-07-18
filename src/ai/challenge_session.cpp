@@ -29,7 +29,7 @@ const GameSchedule kLatinSequence[9] = {
 
 }  // namespace
 
-ChallengeSession::ChallengeSession(const Policy& policy,
+ChallengeSession::ChallengeSession(const PolicyMetadata& policy,
                                    const std::filesystem::path& log_dir,
                                    std::int32_t requested_games)
     : policy_(policy), log_dir_(log_dir), requested_games_(requested_games) {
