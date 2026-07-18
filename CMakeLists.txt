@@ -16,6 +16,16 @@ add_library(pulse_core
 
 target_include_directories(pulse_core PUBLIC src/core)
 
+add_library(pulse_challenge
+    src/ai/challenge_session.cpp
+    src/ai/challenge_cli.cpp
+    src/ai/pulse_ai.cpp
+    src/ai/pulse_policy.cpp
+)
+
+target_include_directories(pulse_challenge PUBLIC src/ai)
+target_link_libraries(pulse_challenge PRIVATE pulse_core)
+
 if(MSVC)
     target_compile_options(pulse_core PRIVATE /W4 /permissive- /EHsc /Zc:__cplusplus)
 else()
@@ -23,7 +33,7 @@ else()
 endif()
 
 add_executable(pulse_headless src/apps/headless_main.cpp)
-target_link_libraries(pulse_headless PRIVATE pulse_core)
+target_link_libraries(pulse_headless PRIVATE pulse_core pulse_challenge)
 
 if(WIN32 AND PULSE_BUILD_VIEWER)
     add_executable(pulse_viewer WIN32
@@ -32,7 +42,7 @@ if(WIN32 AND PULSE_BUILD_VIEWER)
         src/apps/viewer_monitor.cpp
         src/apps/viewer_d2d.cpp
     )
-    target_link_libraries(pulse_viewer PRIVATE pulse_core user32 gdi32 gdiplus d2d1 dwrite windowscodecs ole32)
+    target_link_libraries(pulse_viewer PRIVATE pulse_core pulse_challenge user32 gdi32 gdiplus d2d1 dwrite windowscodecs ole32)
     if(MSVC)
         target_compile_options(pulse_viewer PRIVATE /W4 /permissive- /EHsc /Zc:__cplusplus)
     endif()
@@ -54,4 +64,11 @@ if(BUILD_TESTING)
         target_compile_options(pulse_tests PRIVATE /W4 /permissive- /EHsc /Zc:__cplusplus)
     endif()
     add_test(NAME pulse_tests COMMAND pulse_tests)
+
+    add_executable(pulse_challenge_tests tests/challenge_tests.cpp)
+    target_link_libraries(pulse_challenge_tests PRIVATE pulse_core pulse_challenge)
+    if(MSVC)
+        target_compile_options(pulse_challenge_tests PRIVATE /W4 /permissive- /EHsc /Zc:__cplusplus)
+    endif()
+    add_test(NAME pulse_challenge_tests COMMAND pulse_challenge_tests)
 endif()

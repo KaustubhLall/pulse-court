@@ -1,0 +1,54 @@
+#include "pulse_policy.hpp"
+
+namespace pulse {
+
+PolicyController::PolicyController(const Policy& policy, std::int32_t controlled_seat,
+                                   Character controlled_character, Character opponent_character)
+    : policy_(policy), controlled_seat_(controlled_seat),
+      controlled_character_(controlled_character), opponent_character_(opponent_character) {
+}
+
+void PolicyController::reset(const GameState& state) {
+    (void)state;
+    last_decision_tick_ = 0;
+    button_held_ = false;
+}
+
+FrameInput PolicyController::decide(const GameState& state, std::uint32_t tick, std::int32_t seat) {
+    (void)seat;
+
+    FrameInput in;
+    in.move_x = 0;
+    in.move_y = 0;
+    in.aim_x = 0;
+    in.aim_y = 0;
+    in.buttons = 0;
+
+    // Simple deterministic behavior: alternate between moving and striking
+    if (tick % 120 == 0) {
+        in.buttons = ButtonStrike;
+        button_held_ = true;
+    } else if (tick % 120 == 1) {
+        button_held_ = false;
+    } else {
+        // Move toward center
+        in.move_x = (state.core.position.x > 0) ? 1 : -1;
+        in.aim_x = in.move_x;
+    }
+
+    last_decision_tick_ = tick;
+    return in;
+}
+
+PolicyLoadResult PolicyLoader::load(const std::string& bundle_path,
+                                    const std::string& manifest_path) {
+    (void)bundle_path;
+    (void)manifest_path;
+
+    PolicyLoadResult result;
+    result.ok = false;
+    result.error = "Policy loading not yet implemented";
+    return result;
+}
+
+}  // namespace pulse

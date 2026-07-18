@@ -1,8 +1,13 @@
 #include "pulse_replay.hpp"
 #include "pulse_sim.hpp"
+#include "challenge_session.hpp"
+#include "challenge_cli.hpp"
+#include "pulse_policy.hpp"
 
 #include <chrono>
+#include <cstdint>
 #include <cstring>
+#include <filesystem>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -68,6 +73,93 @@ void print_usage(const char* prog) {
 
 int main(int argc, char** argv) {
     using namespace pulse;
+
+    ChallengeHeadlessArgs smoke_args =
+        parse_challenge_headless_args(argc, const_cast<const char**>(argv));
+    if (smoke_args.smoke) {
+        if (!smoke_args.error.empty()) {
+            std::cerr << "Challenge smoke error: " << smoke_args.error << "\n";
+            print_usage(argv[0]);
+            return 1;
+        }
+
+        // Create a synthetic policy for smoke testing
+        Policy policy;
+        policy.checkpoint_id = "smoke_test_checkpoint";
+        policy.model_version = "v1.0";
+        policy.bundle_sha = "synthetic_bundle_sha";
+        policy.manifest_sha = "synthetic_manifest_sha";
+        policy.certification_sha = "synthetic_cert_sha";
+
+        ChallengeSession session(policy, smoke_args.output_dir,
+                                 smoke_args.games);
+        if (!session.valid()) {
+            std::cerr << "Challenge session failed: " << session.error()
+                      << "\n";
+            return 1;
+        }
+
+        std::cout << "Running challenge smoke mode: " << smoke_args.games
+                  << " games\n";
+
+        for (std::int32_t game_idx = 0; game_idx < smoke_args.games;
+             ++game_idx) {
+            GameSchedule gs = session.schedule_game(game_idx);
+            std::int32_t human_seat = gs.human_seat;
+            std::int32_t bot_seat = gs.bot_seat;
+
+            MatchConfig config;
+            config.score_to_win = 1;  // explicit score-to-one for smoke
+            Simulation sim(gs.characters, config);
+            PolicyController controller(policy, bot_seat,
+                                        gs.characters[bot_seat],
+                                        gs.characters[human_seat]);
+            controller.reset(sim.state());
+
+            const std::int32_t kMaxSmokeTicks = 180 * 120;  // regulation
+            for (std::int32_t t = 0; t < kMaxSmokeTicks; ++t) {
+                std::uint32_t tick = sim.state().tick;
+                std::array<FrameInput, 2> in = {};
+                in[human_seat] = scripted_input(tick, human_seat,
+                                                gs.characters[human_seat]);
+                in[bot_seat] = controller.decide(sim.state(), tick, bot_seat);
+
+                StepResult result = sim.step(in);
+                if (result.match_finished) break;
+            }
+
+            const GameState& state = sim.state();
+            std::int8_t winner = -1;
+            if (state.score[human_seat] > state.score[bot_seat]) {
+                winner = static_cast<std::int8_t>(human_seat);
+            } else if (state.score[bot_seat] > state.score[human_seat]) {
+                winner = static_cast<std::int8_t>(bot_seat);
+            }
+
+            GameEvidence ev;
+            ev.game_index = game_idx;
+            ev.characters = gs.characters;
+            ev.human_seat = static_cast<std::int8_t>(human_seat);
+            ev.bot_seat = static_cast<std::int8_t>(bot_seat);
+            ev.winner = winner;
+            ev.human_score = state.score[human_seat];
+            ev.bot_score = state.score[bot_seat];
+            ev.final_state_hash = std::to_string(sim.state_hash());
+
+            session.start_game(game_idx);
+            session.record_game_result(ev);
+
+            std::cout << "Game " << (game_idx + 1) << ": human "
+                      << ev.human_score << " - bot " << ev.bot_score
+                      << " winner=" << static_cast<int>(winner) << "\n";
+        }
+
+        session.write_summary(ChallengeStatus::Complete);
+        SessionSummary s = session.summary();
+        std::cout << "Smoke complete. Bot wins: " << s.bot_wins
+                  << " Human wins: " << s.human_wins << "\n";
+        return 0;
+    }
 
     std::array<Character, 2> characters = {Character::Kite, Character::Vale};
     std::int32_t ticks = 12000;

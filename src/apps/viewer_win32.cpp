@@ -5,6 +5,9 @@
 #include "viewer_assets.hpp"
 #include "viewer_monitor.hpp"
 #include "viewer_d2d.hpp"
+#include "challenge_session.hpp"
+#include "challenge_cli.hpp"
+#include "pulse_policy.hpp"
 
 #include <windows.h>
 
@@ -15,6 +18,7 @@
 #include <cstdint>
 #include <cstring>
 #include <deque>
+#include <memory>
 #include <string>
 #include <thread>
 #include <vector>
@@ -102,6 +106,22 @@ static int g_gallery_frame = 0;
 
 static bool g_d2d_spike = false;
 static D2DContext g_d2d_ctx;
+
+// Challenge mode state
+static bool g_challenge_mode = false;
+static std::string g_challenge_bundle_path;
+static std::string g_challenge_manifest_path;
+static std::int32_t g_challenge_games = 0;
+static std::string g_challenge_log_dir;
+static std::unique_ptr<ChallengeSession> g_challenge_session;
+// static std::unique_ptr<PolicyController> g_challenge_controller; // TODO: implement
+static std::int32_t g_challenge_human_wins = 0;
+static std::int32_t g_challenge_bot_wins = 0;
+static std::int32_t g_challenge_current_game = -1;
+static std::int32_t g_challenge_human_seat = 0;
+static std::int32_t g_challenge_bot_seat = 1;
+static bool g_challenge_game_active = false;
+static bool g_challenge_abandon_requested = false;
 
 // Toggles the Direct2D spike view at runtime (F4). Factories are created
 // unconditionally at startup, so this is a plain flag flip.
@@ -1186,6 +1206,29 @@ int viewer_main(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     bool left_set = false;
     bool right_set = false;
     g_setup_mode = false;
+
+    // Parse challenge args first
+    ChallengeViewerArgs challenge_args = parse_challenge_viewer_args(argc, const_cast<const wchar_t**>(argv));
+    if (!challenge_args.error.empty()) {
+        MessageBoxA(nullptr, challenge_args.error.c_str(), "Challenge Error",
+                    MB_OK | MB_ICONERROR);
+        LocalFree(argv);
+        return 1;
+    }
+
+    if (challenge_args.challenge) {
+        g_challenge_mode = true;
+        g_challenge_bundle_path = challenge_args.bundle_path;
+        g_challenge_manifest_path = challenge_args.manifest_path;
+        g_challenge_games = challenge_args.games;
+        g_challenge_log_dir = challenge_args.log_dir;
+        // TODO: Initialize challenge session and controller when policy loading is implemented
+        MessageBoxA(nullptr, "Challenge mode not yet fully implemented", "Pulse Court",
+                    MB_OK | MB_ICONINFORMATION);
+        LocalFree(argv);
+        return 1;
+    }
+
     for (int i = 1; i < argc; ++i) {
         std::string arg = narrow_arg(argv[i]);
         if (arg == "--setup") {
