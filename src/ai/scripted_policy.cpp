@@ -9,7 +9,7 @@ ScriptedPolicyController::ScriptedPolicyController(const PolicyMetadata& policy,
 }
 
 void ScriptedPolicyController::reset(const GameState& state) {
-    (void)state;
+    reset_tick_ = state.tick;
     last_decision_tick_ = 0;
     button_held_ = false;
 }
@@ -24,13 +24,14 @@ FrameInput ScriptedPolicyController::decide(const GameState& state, std::uint32_
     in.aim_y = 0;
     in.buttons = 0;
 
-    // Simple deterministic behavior: alternate between moving and striking
-    if (tick % 120 == 0) {
+    // Simple deterministic behavior: strike on a 120-tick cadence anchored
+    // at the last reset, so a fresh game always opens with a strike.
+    const std::uint32_t rel = tick - reset_tick_;
+    if (rel % 120 == 0) {
         in.buttons = ButtonStrike;
         button_held_ = true;
-    } else if (tick % 120 == 1) {
-        button_held_ = false;
     } else {
+        button_held_ = false;
         // Move toward center
         in.move_x = (state.core.position.x > 0) ? 1 : -1;
         in.aim_x = in.move_x;

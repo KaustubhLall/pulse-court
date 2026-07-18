@@ -10,11 +10,16 @@ struct ChallengeViewerArgs {
     bool challenge = false;
     std::string bundle_path;
     std::string manifest_path;
+    // Non-certified preview bundle path, set by --policy-bundle-preview.
+    // Mutually exclusive with --policy-bundle/--policy-manifest. Empty
+    // means preview mode was not requested.
+    std::string preview_bundle_path;
     std::int32_t games = 0;
     std::string log_dir;
     std::string error;
     bool setup = false;
     bool gallery = false;
+    bool replay = false;
 };
 
 struct ChallengeHeadlessArgs {

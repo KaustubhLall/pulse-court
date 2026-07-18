@@ -5,10 +5,12 @@
 #include "viewer_assets.hpp"
 #include "viewer_monitor.hpp"
 #include "viewer_d2d.hpp"
-#include "challenge_session.hpp"
+#include "challenge_protocol.hpp"
 #include "challenge_cli.hpp"
 #include "scripted_policy.hpp"
 #include "pulse_replay.hpp"
+#include "pulse_policy.hpp"
+#include "pulse_policy_adapter.hpp"
 
 #include <windows.h>
 
@@ -119,19 +121,27 @@ static D2DContext g_d2d_ctx;
 
 // Challenge mode state
 static bool g_challenge_mode = false;
+// True when the loaded policy came from --policy-bundle-preview (a
+// non-strict, single-file load with no manifest/provenance). Preview
+// sessions can never satisfy the certified gate; the HUD banners this
+// prominently so preview evidence is never mistaken for certified evidence.
+static bool g_challenge_preview = false;
 static std::string g_challenge_bundle_path;
 static std::string g_challenge_manifest_path;
 static std::int32_t g_challenge_games = 0;
 static std::string g_challenge_log_dir;
-static std::unique_ptr<ChallengeSession> g_challenge_session;
-// static std::unique_ptr<ScriptedPolicyController> g_challenge_controller; // TODO: implement
-static std::int32_t g_challenge_human_wins = 0;
-static std::int32_t g_challenge_bot_wins = 0;
+static std::unique_ptr<Policy> g_challenge_policy;
+static std::unique_ptr<pulse::challenge::ChallengeSession> g_challenge_session;
+static std::unique_ptr<pulse::ai::PolicyController> g_challenge_controller;
 static std::int32_t g_challenge_current_game = -1;
 static std::int32_t g_challenge_human_seat = 0;
 static std::int32_t g_challenge_bot_seat = 1;
-static bool g_challenge_game_active = false;
-static bool g_challenge_abandon_requested = false;
+static bool g_challenge_complete = false;
+static bool g_challenge_integrity_error = false;
+
+static void start_challenge_game(std::int32_t game_index);
+static void record_challenge_game_and_advance();
+static void write_challenge_summary_before_exit();
 
 // Toggles the Direct2D spike view at runtime (F4). Factories are created
 // unconditionally at startup, so this is a plain flag flip.
@@ -198,6 +208,102 @@ static std::string narrow_arg(const wchar_t* w) {
 
 static void clear_edge_triggers() {
     std::memset(g_key_pressed, 0, sizeof(g_key_pressed));
+}
+
+// Starts (or restarts into) the challenge game at `game_index`: pulls the
+// frozen matchup/seat assignment from the session's schedule, rebuilds the
+// Simulation as a score-to-1 match with those characters, and resets all the
+// per-match transient state (animation, input, trace, timing) the same way
+// the setup-screen "Start Match" path does.
+static void start_challenge_game(std::int32_t game_index) {
+    if (!g_challenge_session || !g_challenge_controller || !g_sim) return;
+
+    pulse::challenge::GameSchedule schedule =
+        g_challenge_session->get_schedule(game_index);
+    g_challenge_human_seat = schedule.human_physical_seat;
+    g_challenge_bot_seat = schedule.bot_seat;
+    g_chars[static_cast<std::size_t>(g_challenge_human_seat)] = schedule.human_char;
+    g_chars[static_cast<std::size_t>(g_challenge_bot_seat)] = schedule.bot_char;
+
+    MatchConfig match_config;
+    match_config.score_to_win = 1;
+    *g_sim = Simulation(g_chars, match_config);
+
+    g_anim.reset(g_chars);
+    g_challenge_controller->reset();
+
+    g_input = {};
+    g_pending_buttons = {};
+    clear_edge_triggers();
+    g_trace.clear();
+
+    g_accumulated_time = 0.0;
+    g_render_accumulated_time = 0.0;
+    g_manual_pause = false;
+    g_reset_requested = false;
+
+    g_challenge_current_game = game_index;
+}
+
+// Called from advance_tick() when a challenge game's match_finished fires.
+// Builds evidence from the just-finished Simulation, appends it through the
+// session (append-only, flushed), and either starts the next game or marks
+// the whole session complete after game 20.
+static void record_challenge_game_and_advance() {
+    if (!g_challenge_session || !g_sim) return;
+
+    const GameState& state = g_sim->state();
+
+    std::int8_t winner = -1;
+    if (state.score[0] > state.score[1]) {
+        winner = 0;
+    } else if (state.score[1] > state.score[0]) {
+        winner = 1;
+    }
+
+    pulse::challenge::GameEvidence evidence;
+    evidence.game_index = g_challenge_current_game;
+    evidence.human_seat = g_challenge_human_seat;
+    evidence.bot_seat = g_challenge_bot_seat;
+    evidence.human_char = g_chars[static_cast<std::size_t>(g_challenge_human_seat)];
+    evidence.bot_char = g_chars[static_cast<std::size_t>(g_challenge_bot_seat)];
+    evidence.winner = winner;
+    evidence.score_0 = state.score[0];
+    evidence.score_1 = state.score[1];
+    evidence.ticks = static_cast<int>(state.tick);
+    evidence.state_hash = g_sim->state_hash();
+    evidence.timestamp_utc = pulse::challenge::ChallengeSession::get_timestamp_utc();
+    evidence.completed = true;
+    evidence.integrity_flags = g_challenge_integrity_error;
+    evidence.termination_reason = (winner >= 0) ? "goal" : "timeout_draw";
+
+    if (!g_challenge_session->record_game(evidence)) {
+        // Evidence didn't validate against the frozen schedule or was
+        // rejected by the append-only log (I/O error, out-of-order, etc.):
+        // freeze the session as a protocol failure rather than silently
+        // continuing to play games that can never be recorded.
+        g_challenge_session->mark_integrity_violation("record_game_failed");
+        g_challenge_integrity_error = true;
+        g_challenge_complete = true;
+        g_challenge_session->write_summary();
+        return;
+    }
+
+    if (g_challenge_session->is_complete()) {
+        g_challenge_complete = true;
+        g_challenge_session->write_summary();
+    } else {
+        start_challenge_game(g_challenge_current_game + 1);
+    }
+}
+
+// Writes the current (partial or complete) session summary. Called from the
+// Esc key handler and WM_CLOSE so a mid-session exit still leaves a
+// Partial summary.json behind instead of nothing at all.
+static void write_challenge_summary_before_exit() {
+    if (g_challenge_mode && g_challenge_session) {
+        g_challenge_session->write_summary();
+    }
 }
 
 const char* phase_name(Phase phase) {
@@ -335,24 +441,73 @@ static void poll_input() {
         in.aim_y = in.move_y;
     };
 
-    set_move(g_input[0], g_key_state['W'], g_key_state['S'], g_key_state['A'],
-             g_key_state['D']);
-    set_move(g_input[1], g_key_state['I'], g_key_state['K'], g_key_state['J'],
-             g_key_state['L']);
+    if (g_challenge_mode) {
+        // Human keyboard input always routes to the human seat for the
+        // current scheduled game, whichever physical seat that is; the bot
+        // seat is driven entirely by the PolicyController in advance_tick().
+        set_move(g_input[static_cast<std::size_t>(g_challenge_human_seat)],
+                 g_key_state['W'], g_key_state['S'], g_key_state['A'],
+                 g_key_state['D']);
+        if (g_key_pressed['F']) {
+            g_pending_buttons[static_cast<std::size_t>(g_challenge_human_seat)] |=
+                ButtonStrike;
+        }
+        if (g_key_pressed['G']) {
+            g_pending_buttons[static_cast<std::size_t>(g_challenge_human_seat)] |=
+                ButtonAbility;
+        }
+        if (g_key_pressed['H']) {
+            g_pending_buttons[static_cast<std::size_t>(g_challenge_human_seat)] |=
+                ButtonDash;
+        }
 
-    if (g_key_pressed['F']) g_pending_buttons[0] |= ButtonStrike;
-    if (g_key_pressed['G']) g_pending_buttons[0] |= ButtonAbility;
-    if (g_key_pressed['H']) g_pending_buttons[0] |= ButtonDash;
-    if (g_key_pressed['U']) g_pending_buttons[1] |= ButtonStrike;
-    if (g_key_pressed['O']) g_pending_buttons[1] |= ButtonAbility;
-    if (g_key_pressed['P']) g_pending_buttons[1] |= ButtonDash;
+        // R normally requests a mid-match reset; in challenge mode a reset
+        // attempt is itself an integrity violation (it would let the human
+        // discard an unfavorable game), so it's recorded and the session is
+        // frozen instead of restarting the match.
+        if (g_key_pressed['R']) {
+            if (g_challenge_session) {
+                g_challenge_session->mark_integrity_violation("manual_reset_attempt");
+            }
+            g_challenge_integrity_error = true;
+            g_key_pressed['R'] = false;
+        }
+    } else {
+        set_move(g_input[0], g_key_state['W'], g_key_state['S'], g_key_state['A'],
+                 g_key_state['D']);
+        set_move(g_input[1], g_key_state['I'], g_key_state['K'], g_key_state['J'],
+                 g_key_state['L']);
 
-    if (g_key_pressed['R']) g_reset_requested = true;
+        if (g_key_pressed['F']) g_pending_buttons[0] |= ButtonStrike;
+        if (g_key_pressed['G']) g_pending_buttons[0] |= ButtonAbility;
+        if (g_key_pressed['H']) g_pending_buttons[0] |= ButtonDash;
+        if (g_key_pressed['U']) g_pending_buttons[1] |= ButtonStrike;
+        if (g_key_pressed['O']) g_pending_buttons[1] |= ButtonAbility;
+        if (g_key_pressed['P']) g_pending_buttons[1] |= ButtonDash;
+
+        if (g_key_pressed['R']) g_reset_requested = true;
+    }
+
     if (g_key_pressed[VK_SPACE]) {
         g_manual_pause = !g_manual_pause;
         g_key_pressed[VK_SPACE] = false;
     }
-    if (g_key_pressed[VK_ESCAPE]) g_quit_requested = true;
+    if (g_key_pressed[VK_ESCAPE]) {
+        if (g_challenge_mode) {
+            // Esc mid-session is a manual exit: mark the integrity
+            // violation, write whatever summary exists so far (Partial
+            // unless the session already completed), then quit.
+            if (g_challenge_session) {
+                g_challenge_session->mark_integrity_violation("manual_exit");
+            }
+            g_challenge_integrity_error = true;
+            write_challenge_summary_before_exit();
+            g_quit_requested = true;
+        } else {
+            g_quit_requested = true;
+        }
+        g_key_pressed[VK_ESCAPE] = false;
+    }
 
     if (g_key_pressed['N'] && g_manual_pause) {
         g_step_requested = true;
@@ -370,7 +525,7 @@ static void poll_input() {
         g_pseudo3d = !g_pseudo3d;
         g_key_pressed[VK_F3] = false;
     }
-    if (g_key_pressed['B']) {
+    if (!g_challenge_mode && g_key_pressed['B']) {
         g_bot_active = !g_bot_active;
         g_key_pressed['B'] = false;
     }
@@ -449,7 +604,17 @@ static FrameInput compute_bot_input(const GameState& state) {
     return in;
 }
 
-static void advance_tick(Simulation& sim, const std::array<FrameInput, 2>& in) {
+static void advance_tick(Simulation& sim, std::array<FrameInput, 2>& in) {
+    // In challenge mode the bot seat's input is never taken from
+    // keyboard/g_bot_active -- it's always the certified/preview policy,
+    // driven at its trained 12-tick cadence via PolicyController.
+    if (g_challenge_mode && g_challenge_controller && !g_challenge_complete) {
+        pulse::ai::ControllerOutput bot_output =
+            g_challenge_controller->act(sim.state(),
+                                        static_cast<std::size_t>(g_challenge_bot_seat));
+        in[static_cast<std::size_t>(g_challenge_bot_seat)] = bot_output.input;
+    }
+
     StepEvents events;
     StepResult result = sim.step(in, &events);
     g_anim.update(sim.state(), events);
@@ -499,7 +664,11 @@ static void advance_tick(Simulation& sim, const std::array<FrameInput, 2>& in) {
     }
 
     if (result.match_finished) {
-        g_manual_pause = true;
+        if (g_challenge_mode && !g_challenge_complete) {
+            record_challenge_game_and_advance();
+        } else {
+            g_manual_pause = true;
+        }
     }
 }
 
@@ -611,7 +780,73 @@ static void render_sidebar(HDC hdc, int x, int y, int w, int h, int fps) {
     }
 }
 
+static void render_challenge_footer(HDC hdc, int x, int y) {
+    int yy = y;
+    char buf[256];
+
+    if (g_challenge_preview) {
+        draw_text(hdc, x, yy,
+                  "*** NON-CERTIFIED PREVIEW -- RESULTS DO NOT COUNT TOWARD THE GATE ***",
+                  RGB(255, 70, 70), 14);
+        yy += 18;
+    }
+
+    std::int32_t total_games = g_challenge_session
+                                    ? g_challenge_session->total_games()
+                                    : g_challenge_games;
+    const char* human_side = (g_challenge_human_seat == 0) ? "LEFT" : "RIGHT";
+    const char* bot_side = (g_challenge_bot_seat == 0) ? "LEFT" : "RIGHT";
+    snprintf(buf, sizeof(buf), "Game %d/%d    Human (%s): %s    Bot (%s): %s",
+             g_challenge_current_game + 1, total_games, human_side,
+             character_name(g_chars[static_cast<std::size_t>(g_challenge_human_seat)]),
+             bot_side,
+             character_name(g_chars[static_cast<std::size_t>(g_challenge_bot_seat)]));
+    draw_text(hdc, x, yy, buf, kTextMain, 12);
+    yy += 14;
+
+    if (g_challenge_session) {
+        const pulse::challenge::SessionSummary& summary = g_challenge_session->summary();
+        char sha_prefix[16] = "--------";
+        if (g_challenge_policy) {
+            const std::string& sha = g_challenge_policy->bundle_sha256();
+            if (sha.size() >= 8) {
+                snprintf(sha_prefix, sizeof(sha_prefix), "%.8s", sha.c_str());
+            }
+        }
+        const char* status_label = g_challenge_integrity_error
+                                        ? "INTEGRITY ERROR"
+                                        : summary.completion_state.c_str();
+        COLORREF status_color = g_challenge_integrity_error ? RGB(255, 100, 100)
+                                : g_challenge_complete       ? RGB(100, 255, 100)
+                                                              : kTextMain;
+        snprintf(buf, sizeof(buf),
+                 "Session Score: Human %d - Bot %d    Policy: %s    Status: %s",
+                 summary.human_wins, summary.bot_wins, sha_prefix, status_label);
+        draw_text(hdc, x, yy, buf, status_color, 12);
+        yy += 14;
+
+        if (g_challenge_complete) {
+            const char* result = summary.gate_passed ? "PASS" : "FAIL";
+            COLORREF result_color = summary.gate_passed ? RGB(100, 255, 100) : RGB(255, 100, 100);
+            snprintf(buf, sizeof(buf), "Gate Result: %s (bot wins %d/%d, %s)",
+                     result, summary.bot_wins, summary.completed_games,
+                     g_challenge_preview ? "preview, not certified" : "certified");
+            draw_text(hdc, x, yy, buf, result_color, 12);
+            yy += 14;
+        }
+    }
+
+    draw_text(hdc, x, yy,
+              "WASD move   F Strike   G Ability   H Dash   Esc quit (writes partial summary)",
+              kTextDim, 12);
+}
+
 static void render_footer(HDC hdc, int x, int y) {
+    if (g_challenge_mode) {
+        render_challenge_footer(hdc, x, y);
+        return;
+    }
+
     int yy = y;
     char buf[256];
     if (g_sim) {
@@ -1234,6 +1469,17 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
                 }
             }
             return 0;
+        case WM_CLOSE:
+            // In challenge mode, a window close is a manual exit just like
+            // Esc: mark the integrity violation and flush whatever summary
+            // exists so far before the message loop tears down.
+            if (g_challenge_mode && g_challenge_session) {
+                g_challenge_session->mark_integrity_violation("manual_close");
+                g_challenge_integrity_error = true;
+                write_challenge_summary_before_exit();
+            }
+            PostQuitMessage(0);
+            return 0;
         case WM_DESTROY:
             PostQuitMessage(0);
             return 0;
@@ -1264,6 +1510,9 @@ int viewer_main(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     // Parse challenge args first
     ChallengeViewerArgs challenge_args = parse_challenge_viewer_args(argc, const_cast<const wchar_t**>(argv));
     if (!challenge_args.error.empty()) {
+        if (AttachConsole(ATTACH_PARENT_PROCESS)) {
+            fprintf(stderr, "%s\n", challenge_args.error.c_str());
+        }
         MessageBoxA(nullptr, challenge_args.error.c_str(), "Challenge Error",
                     MB_OK | MB_ICONERROR);
         LocalFree(argv);
@@ -1272,43 +1521,110 @@ int viewer_main(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
     if (challenge_args.challenge) {
         g_challenge_mode = true;
+        g_challenge_preview = !challenge_args.preview_bundle_path.empty();
         g_challenge_bundle_path = challenge_args.bundle_path;
         g_challenge_manifest_path = challenge_args.manifest_path;
         g_challenge_games = challenge_args.games;
         g_challenge_log_dir = challenge_args.log_dir;
-        // TODO: Initialize challenge session and controller when policy loading is implemented
-        MessageBoxA(nullptr, "Challenge mode not yet fully implemented", "Pulse Court",
-                    MB_OK | MB_ICONINFORMATION);
-        LocalFree(argv);
-        return 1;
-    }
 
-    for (int i = 1; i < argc; ++i) {
-        std::string arg = narrow_arg(argv[i]);
-        if (arg == "--setup") {
-            g_setup_mode = true;
-        } else if (arg == "--gallery") {
-            g_gallery_mode = true;
-        } else if (arg == "--d2d-spike") {
-            g_d2d_spike = true;
-        } else if (arg == "--passive") {
-            g_passive = true;
-        } else if (arg == "--left" && i + 1 < argc) {
-            left_set = parse_character(narrow_arg(argv[++i]).c_str(),
-                                       g_chars[0]);
-        } else if (arg == "--right" && i + 1 < argc) {
-            right_set = parse_character(narrow_arg(argv[++i]).c_str(),
-                                       g_chars[1]);
-        } else if (arg == "--monitor" && i + 1 < argc) {
-            g_monitor_name = argv[++i];
-            g_monitor_name_narrow = narrow_arg(g_monitor_name.c_str());
-            g_use_monitor_placement = true;
-        } else if (arg == "--replay" && i + 1 < argc) {
-            g_replay_mode = true;
-            replay_path = narrow_arg(argv[++i]);
+        g_challenge_policy = std::make_unique<Policy>();
+        pulse::PolicyProvenance provenance;
+
+        if (g_challenge_preview) {
+            // T4-style non-certified preview: single-file, non-strict load.
+            // No manifest exists to populate a real PolicyProvenance, so a
+            // well-formed-but-placeholder snapshot is synthesized here just
+            // to satisfy ChallengeSession::initialize()'s hex64 format
+            // checks -- only bundle_sha256 is real. g_challenge_preview and
+            // the loud HUD banner (render_challenge_footer) keep this from
+            // ever being mistaken for certified evidence.
+            if (!g_challenge_policy->load_preview(challenge_args.preview_bundle_path)) {
+                const char* msg = "Failed to load preview policy bundle";
+                if (AttachConsole(ATTACH_PARENT_PROCESS)) {
+                    fprintf(stderr, "%s\n", msg);
+                }
+                MessageBoxA(nullptr, msg, "Pulse Court", MB_OK | MB_ICONERROR);
+                LocalFree(argv);
+                return 1;
+            }
+            const std::string marker = "non_certified_preview";
+            const std::string placeholder = pulse::sha256_hex(
+                reinterpret_cast<const unsigned char*>(marker.data()), marker.size());
+            provenance.bundle_sha256 = g_challenge_policy->bundle_sha256();
+            provenance.manifest_sha256 = placeholder;
+            provenance.checkpoint_sha256 = placeholder;
+            provenance.certification_sha256 = placeholder;
+            provenance.dll_sha256 = placeholder;
+            provenance.config_sha256 = placeholder;
+            provenance.ruleset_sha256 = placeholder;
+            provenance.simulator_sha256 = placeholder;
+        } else {
+            // Fail-closed strict load: bundle + manifest, full provenance
+            // and certification-gate validation.
+            if (!g_challenge_policy->load(challenge_args.bundle_path,
+                                         challenge_args.manifest_path)) {
+                const char* msg =
+                    "Failed to load policy bundle or manifest validation failed";
+                if (AttachConsole(ATTACH_PARENT_PROCESS)) {
+                    fprintf(stderr, "%s\n", msg);
+                }
+                MessageBoxA(nullptr, msg, "Pulse Court", MB_OK | MB_ICONERROR);
+                LocalFree(argv);
+                return 1;
+            }
+            provenance = g_challenge_policy->provenance();
         }
+
+        g_challenge_session =
+            std::make_unique<pulse::challenge::ChallengeSession>(g_challenge_log_dir);
+        if (!g_challenge_session->initialize(provenance, !g_challenge_preview,
+                                             g_challenge_games)) {
+            const char* msg =
+                "Failed to initialize challenge session (log directory may "
+                "already contain evidence)";
+            if (AttachConsole(ATTACH_PARENT_PROCESS)) {
+                fprintf(stderr, "%s\n", msg);
+            }
+            MessageBoxA(nullptr, msg, "Pulse Court", MB_OK | MB_ICONERROR);
+            LocalFree(argv);
+            return 1;
+        }
+
+        g_challenge_controller =
+            std::make_unique<pulse::ai::PolicyController>(*g_challenge_policy);
+
+        g_setup_mode = false;
+        g_gallery_mode = false;
+        g_replay_mode = false;
+        LocalFree(argv);
+    } else {
+        for (int i = 1; i < argc; ++i) {
+            std::string arg = narrow_arg(argv[i]);
+            if (arg == "--setup") {
+                g_setup_mode = true;
+            } else if (arg == "--gallery") {
+                g_gallery_mode = true;
+            } else if (arg == "--d2d-spike") {
+                g_d2d_spike = true;
+            } else if (arg == "--passive") {
+                g_passive = true;
+            } else if (arg == "--left" && i + 1 < argc) {
+                left_set = parse_character(narrow_arg(argv[++i]).c_str(),
+                                           g_chars[0]);
+            } else if (arg == "--right" && i + 1 < argc) {
+                right_set = parse_character(narrow_arg(argv[++i]).c_str(),
+                                           g_chars[1]);
+            } else if (arg == "--monitor" && i + 1 < argc) {
+                g_monitor_name = argv[++i];
+                g_monitor_name_narrow = narrow_arg(g_monitor_name.c_str());
+                g_use_monitor_placement = true;
+            } else if (arg == "--replay" && i + 1 < argc) {
+                g_replay_mode = true;
+                replay_path = narrow_arg(argv[++i]);
+            }
+        }
+        LocalFree(argv);
     }
-    LocalFree(argv);
 
     if (g_replay_mode && (g_gallery_mode || g_setup_mode)) {
         const char* msg =
@@ -1335,6 +1651,8 @@ int viewer_main(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         }
         g_chars = g_replay_storage.characters;
     } else if (g_gallery_mode) {
+        g_setup_mode = false;
+    } else if (g_challenge_mode) {
         g_setup_mode = false;
     } else if (!left_set || !right_set) {
         g_setup_mode = true;
@@ -1456,9 +1774,12 @@ int viewer_main(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     }
 
     DWORD ex_style = g_passive ? WS_EX_NOACTIVATE : 0;
-    const wchar_t* window_title = g_gallery_mode
-        ? L"Pulse Court - Gallery"
-        : (g_replay_mode ? L"Pulse Court - Replay" : L"Pulse Court");
+    const wchar_t* window_title = g_challenge_mode
+        ? (g_challenge_preview ? L"Pulse Court - Challenge (PREVIEW)"
+                               : L"Pulse Court - Challenge")
+        : g_gallery_mode
+              ? L"Pulse Court - Gallery"
+              : (g_replay_mode ? L"Pulse Court - Replay" : L"Pulse Court");
     g_hwnd = CreateWindowExW(
         ex_style, kClassName, window_title, WS_OVERLAPPEDWINDOW, window_x,
         window_y, window_width, window_height, nullptr, nullptr, hInstance,
@@ -1476,7 +1797,13 @@ int viewer_main(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                                                 g_replay_storage.config)
                                    : Simulation(g_chars);
     g_sim = &sim;
-    g_anim.reset(g_chars);
+    if (g_challenge_mode) {
+        // Overwrites `sim` with the game-1 schedule (characters + match
+        // config) via start_challenge_game().
+        start_challenge_game(0);
+    } else {
+        g_anim.reset(g_chars);
+    }
 
     g_accumulated_time = 0.0;
     g_render_accumulated_time = 0.0;
@@ -1568,7 +1895,12 @@ int viewer_main(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                     return;
                 }
                 const RecordedTick& rec = g_replay_storage.ticks[g_replay_cursor];
-                advance_tick(sim, rec.inputs);
+                // advance_tick takes a mutable reference (it may overwrite
+                // the bot seat's input in challenge mode); replay playback
+                // is never in challenge mode, but the recorded tape must
+                // stay untouched regardless, so step from a copy.
+                std::array<FrameInput, 2> in = rec.inputs;
+                advance_tick(sim, in);
                 if (!g_replay_diverged &&
                     sim.state_hash() != rec.expected_hash) {
                     g_replay_diverged = true;
@@ -1622,6 +1954,11 @@ int viewer_main(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         poll_input();
 
         bool should_step = (g_has_focus || g_passive) && !g_manual_pause;
+        if (g_challenge_mode && (g_challenge_complete || g_challenge_integrity_error)) {
+            // Freeze gameplay once the session is over or has been flagged:
+            // no further ticks, no further games, just the frozen HUD.
+            should_step = false;
+        }
         if (should_step) {
             g_accumulated_time += delta * g_sim_speed;
             while (g_accumulated_time >= kSimDt) {
@@ -1657,6 +1994,11 @@ int viewer_main(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     DestroyWindow(g_hwnd);
     g_assets = nullptr;
     assets_local.reset();
+
+    g_challenge_controller.reset();
+    g_challenge_policy.reset();
+    g_challenge_session.reset();
+
     Gdiplus::GdiplusShutdown(gdiplus_token);
 
     g_d2d_ctx.release_all_resources();

@@ -22,6 +22,7 @@ private:
     Character controlled_character_;
     Character opponent_character_;
     std::uint32_t last_decision_tick_ = 0;
+    std::uint32_t reset_tick_ = 0;
     bool button_held_ = false;
 };
 

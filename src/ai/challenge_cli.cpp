@@ -40,6 +40,7 @@ ChallengeViewerArgs parse_challenge_viewer_args(int argc,
     ChallengeViewerArgs args;
     bool bundle_set = false;
     bool manifest_set = false;
+    bool preview_bundle_set = false;
     bool games_set = false;
     bool log_dir_set = false;
 
@@ -73,6 +74,24 @@ ChallengeViewerArgs parse_challenge_viewer_args(int argc,
             }
             args.manifest_path = narrow(argv[++i]);
             manifest_set = true;
+        } else if (arg == "--policy-bundle-preview") {
+            if (i + 1 >= argc) {
+                args.error = "missing value for --policy-bundle-preview";
+                return args;
+            }
+            if (preview_bundle_set) {
+                args.error = "duplicate --policy-bundle-preview";
+                return args;
+            }
+            args.preview_bundle_path = narrow(argv[++i]);
+            preview_bundle_set = true;
+        } else if (arg == "--replay") {
+            // Recognized here (rather than left to fall through to the
+            // unknown-argument/positional cases below) so --challenge and
+            // --replay are caught as mutually exclusive regardless of
+            // argv order.
+            args.replay = true;
+            if (i + 1 < argc) ++i;
         } else if (arg == "--challenge-games") {
             if (i + 1 >= argc) {
                 args.error = "missing value for --challenge-games";
@@ -117,11 +136,24 @@ ChallengeViewerArgs parse_challenge_viewer_args(int argc,
     }
 
     if (args.challenge) {
-        if (!bundle_set) {
+        bool strict_seen = bundle_set || manifest_set;
+        if (strict_seen && preview_bundle_set) {
+            args.error =
+                "--policy-bundle/--policy-manifest and "
+                "--policy-bundle-preview are mutually exclusive";
+            return args;
+        }
+        if (!strict_seen && !preview_bundle_set) {
+            args.error =
+                "missing --policy-bundle + --policy-manifest, or "
+                "--policy-bundle-preview";
+            return args;
+        }
+        if (strict_seen && !bundle_set) {
             args.error = "missing --policy-bundle";
             return args;
         }
-        if (!manifest_set) {
+        if (strict_seen && !manifest_set) {
             args.error = "missing --policy-manifest";
             return args;
         }
@@ -133,8 +165,9 @@ ChallengeViewerArgs parse_challenge_viewer_args(int argc,
             args.error = "missing --challenge-log-dir";
             return args;
         }
-        if (args.setup || args.gallery) {
-            args.error = "--challenge incompatible with --setup/--gallery";
+        if (args.setup || args.gallery || args.replay) {
+            args.error =
+                "--challenge incompatible with --setup/--gallery/--replay";
             return args;
         }
     }

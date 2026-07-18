@@ -16,6 +16,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -329,22 +330,22 @@ void test_cli_headless_args() {
 void test_cli_validation() {
     // Test missing required args
     const wchar_t* argv1[] = {L"program", L"--challenge"};
-    ChallengeViewerArgs args1 = parse_challenge_viewer_args(1, argv1);
+    ChallengeViewerArgs args1 = parse_challenge_viewer_args(static_cast<int>(std::size(argv1)), argv1);
     assert(!args1.error.empty());
 
     // Test wrong games count
     const wchar_t* argv2[] = {L"program", L"--challenge", L"--policy-bundle", L"bundle.pzb", L"--policy-manifest", L"manifest.json", L"--challenge-games", L"10", L"--challenge-log-dir", L"logs"};
-    ChallengeViewerArgs args2 = parse_challenge_viewer_args(9, argv2);
+    ChallengeViewerArgs args2 = parse_challenge_viewer_args(static_cast<int>(std::size(argv2)), argv2);
     assert(!args2.error.empty());
 
     // Test duplicate args
     const wchar_t* argv3[] = {L"program", L"--challenge", L"--challenge", L"--policy-bundle", L"bundle.pzb", L"--policy-manifest", L"manifest.json", L"--challenge-games", L"20", L"--challenge-log-dir", L"logs"};
-    ChallengeViewerArgs args3 = parse_challenge_viewer_args(10, argv3);
+    ChallengeViewerArgs args3 = parse_challenge_viewer_args(static_cast<int>(std::size(argv3)), argv3);
     assert(!args3.error.empty());
 
     // Test unknown flags
     const wchar_t* argv4[] = {L"program", L"--challenge", L"--policy-bundle", L"bundle.pzb", L"--policy-manifest", L"manifest.json", L"--challenge-games", L"20", L"--challenge-log-dir", L"logs", L"--unknown-flag"};
-    ChallengeViewerArgs args4 = parse_challenge_viewer_args(10, argv4);
+    ChallengeViewerArgs args4 = parse_challenge_viewer_args(static_cast<int>(std::size(argv4)), argv4);
     assert(!args4.error.empty());
 
     std::cout << "test_cli_validation passed\n";
@@ -353,22 +354,22 @@ void test_cli_validation() {
 void test_cli_headless_validation() {
     // Test missing required args
     const char* argv1[] = {"program", "--challenge-smoke"};
-    ChallengeHeadlessArgs args1 = parse_challenge_headless_args(2, argv1);
+    ChallengeHeadlessArgs args1 = parse_challenge_headless_args(static_cast<int>(std::size(argv1)), argv1);
     assert(!args1.error.empty());
 
     // Test wrong games count
     const char* argv2[] = {"program", "--challenge-smoke", "--policy-bundle", "bundle.pzb", "--policy-manifest", "manifest.json", "--games", "5", "--output-dir", "output"};
-    ChallengeHeadlessArgs args2 = parse_challenge_headless_args(9, argv2);
+    ChallengeHeadlessArgs args2 = parse_challenge_headless_args(static_cast<int>(std::size(argv2)), argv2);
     assert(!args2.error.empty());
 
     // Test duplicate args
     const char* argv3[] = {"program", "--challenge-smoke", "--challenge-smoke", "--policy-bundle", "bundle.pzb", "--policy-manifest", "manifest.json", "--games", "6", "--output-dir", "output"};
-    ChallengeHeadlessArgs args3 = parse_challenge_headless_args(10, argv3);
+    ChallengeHeadlessArgs args3 = parse_challenge_headless_args(static_cast<int>(std::size(argv3)), argv3);
     assert(!args3.error.empty());
 
     // Test unknown flags
     const char* argv4[] = {"program", "--challenge-smoke", "--policy-bundle", "bundle.pzb", "--policy-manifest", "manifest.json", "--games", "6", "--output-dir", "output", "--unknown"};
-    ChallengeHeadlessArgs args4 = parse_challenge_headless_args(10, argv4);
+    ChallengeHeadlessArgs args4 = parse_challenge_headless_args(static_cast<int>(std::size(argv4)), argv4);
     assert(!args4.error.empty());
 
     std::cout << "test_cli_headless_validation passed\n";
