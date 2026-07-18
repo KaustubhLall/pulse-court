@@ -466,10 +466,14 @@ static void poll_input() {
         // discard an unfavorable game), so it's recorded and the session is
         // frozen instead of restarting the match.
         if (g_key_pressed['R']) {
-            if (g_challenge_session) {
+            if (g_challenge_session && !g_challenge_complete) {
                 g_challenge_session->mark_integrity_violation("manual_reset_attempt");
+                g_challenge_integrity_error = true;
+                // Flush the violation to disk immediately: the session is
+                // frozen from here, and a later crash/kill must not leave a
+                // clean-looking summary.
+                write_challenge_summary_before_exit();
             }
-            g_challenge_integrity_error = true;
             g_key_pressed['R'] = false;
         }
     } else {
@@ -495,13 +499,15 @@ static void poll_input() {
     if (g_key_pressed[VK_ESCAPE]) {
         if (g_challenge_mode) {
             // Esc mid-session is a manual exit: mark the integrity
-            // violation, write whatever summary exists so far (Partial
-            // unless the session already completed), then quit.
-            if (g_challenge_session) {
+            // violation and write a Partial summary. After the session has
+            // completed (all 20 games recorded, summary written), quitting
+            // is legitimate and must not retroactively invalidate the
+            // completed session's gate result.
+            if (g_challenge_session && !g_challenge_complete) {
                 g_challenge_session->mark_integrity_violation("manual_exit");
+                g_challenge_integrity_error = true;
+                write_challenge_summary_before_exit();
             }
-            g_challenge_integrity_error = true;
-            write_challenge_summary_before_exit();
             g_quit_requested = true;
         } else {
             g_quit_requested = true;
@@ -1470,10 +1476,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
             }
             return 0;
         case WM_CLOSE:
-            // In challenge mode, a window close is a manual exit just like
-            // Esc: mark the integrity violation and flush whatever summary
-            // exists so far before the message loop tears down.
-            if (g_challenge_mode && g_challenge_session) {
+            // In challenge mode, closing the window mid-session is a manual
+            // exit just like Esc. After completion a close is a legitimate
+            // quit and must not invalidate the completed session.
+            if (g_challenge_mode && g_challenge_session &&
+                !g_challenge_complete) {
                 g_challenge_session->mark_integrity_violation("manual_close");
                 g_challenge_integrity_error = true;
                 write_challenge_summary_before_exit();
