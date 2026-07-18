@@ -114,8 +114,8 @@ void ChallengeSession::append_game_line(const GameEvidence& evidence) {
         << ",\"human_seat\":" << static_cast<int>(evidence.human_seat)
         << ",\"bot_seat\":" << static_cast<int>(evidence.bot_seat)
         << ",\"winner\":" << static_cast<int>(evidence.winner)
-        << ",\"human_score\":" << evidence.human_score
-        << ",\"bot_score\":" << evidence.bot_score
+        << ",\"human_score\":" << static_cast<int>(evidence.human_score)
+        << ",\"bot_score\":" << static_cast<int>(evidence.bot_score)
         << ",\"final_state_hash\":\"" << json_escape(evidence.final_state_hash) << "\""
         << ",\"replay_path\":\"" << json_escape(evidence.replay_path) << "\"}\n";
     file << oss.str();

@@ -150,7 +150,8 @@ int main(int argc, char** argv) {
             session.record_game_result(ev);
 
             std::cout << "Game " << (game_idx + 1) << ": human "
-                      << ev.human_score << " - bot " << ev.bot_score
+                      << static_cast<int>(ev.human_score) << " - bot "
+                      << static_cast<int>(ev.bot_score)
                       << " winner=" << static_cast<int>(winner) << "\n";
         }
 
