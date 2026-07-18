@@ -147,6 +147,7 @@ ChallengeHeadlessArgs parse_challenge_headless_args(
     ChallengeHeadlessArgs args;
     bool bundle_set = false;
     bool manifest_set = false;
+    bool preview_bundle_set = false;
     bool games_set = false;
     bool output_dir_set = false;
 
@@ -169,6 +170,17 @@ ChallengeHeadlessArgs parse_challenge_headless_args(
             }
             args.bundle_path = argv[++i];
             bundle_set = true;
+        } else if (arg == "--policy-bundle-preview") {
+            if (i + 1 >= argc) {
+                args.error = "missing value for --policy-bundle-preview";
+                return args;
+            }
+            if (preview_bundle_set) {
+                args.error = "duplicate --policy-bundle-preview";
+                return args;
+            }
+            args.preview_bundle_path = argv[++i];
+            preview_bundle_set = true;
         } else if (arg == "--policy-manifest") {
             if (i + 1 >= argc) {
                 args.error = "missing value for --policy-manifest";
@@ -220,14 +232,23 @@ ChallengeHeadlessArgs parse_challenge_headless_args(
     }
 
     if (args.smoke) {
-        if (!bundle_set) {
-            args.error = "missing --policy-bundle";
+        if (bundle_set && preview_bundle_set) {
+            args.error =
+                "--policy-bundle and --policy-bundle-preview are mutually "
+                "exclusive";
             return args;
         }
-        if (!manifest_set) {
+        if (!bundle_set && !preview_bundle_set) {
+            args.error = "missing --policy-bundle or --policy-bundle-preview";
+            return args;
+        }
+        if (bundle_set && !manifest_set) {
             args.error = "missing --policy-manifest";
             return args;
         }
+        // Preview mode loads via the non-strict single-file path and does
+        // not require (or use) a manifest; a --policy-manifest alongside
+        // --policy-bundle-preview is simply ignored, not an error.
         if (!games_set) {
             args.error = "missing --games";
             return args;

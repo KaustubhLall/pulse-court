@@ -46,7 +46,9 @@ add_library(pulse_challenge
 )
 
 target_include_directories(pulse_challenge PUBLIC src/ai)
-target_link_libraries(pulse_challenge PRIVATE pulse_core)
+# T4: challenge_smoke.cpp uses pulse::Policy / pulse::ai::PolicyController
+# (non-certified preview mode) in addition to the scripted-bot path.
+target_link_libraries(pulse_challenge PUBLIC pulse_core pulse_policy pulse_ai)
 
 if(MSVC)
     target_compile_options(pulse_core PRIVATE /W4 /permissive- /EHsc /Zc:__cplusplus)
@@ -59,7 +61,7 @@ else()
 endif()
 
 add_executable(pulse_headless src/apps/headless_main.cpp)
-target_link_libraries(pulse_headless PRIVATE pulse_core pulse_challenge)
+target_link_libraries(pulse_headless PRIVATE pulse_core pulse_challenge pulse_policy pulse_ai)
 
 add_executable(pulse_policy_verify src/apps/policy_verify_main.cpp)
 target_link_libraries(pulse_policy_verify PRIVATE pulse_policy pulse_ai pulse_core)
@@ -105,7 +107,7 @@ if(BUILD_TESTING)
     add_test(NAME pulse_tests COMMAND pulse_tests)
 
     add_executable(pulse_challenge_tests tests/challenge_tests.cpp)
-    target_link_libraries(pulse_challenge_tests PRIVATE pulse_core pulse_challenge)
+    target_link_libraries(pulse_challenge_tests PRIVATE pulse_core pulse_challenge pulse_policy pulse_policy_devgen pulse_ai)
     if(MSVC)
         target_compile_options(pulse_challenge_tests PRIVATE /W4 /permissive- /EHsc /Zc:__cplusplus)
     endif()

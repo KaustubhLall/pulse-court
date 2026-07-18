@@ -36,6 +36,12 @@ struct GameEvidence {
     std::int8_t bot_score;
     std::string final_state_hash;
     std::string replay_path;
+    // T4: set true when this game's bot seat was driven by the non-strict
+    // preview policy path (pulse::ai::PolicyController over a load_preview()
+    // bundle) instead of the certified/scripted paths. Propagated into
+    // games.jsonl as "non_certified_preview" so preview evidence can never
+    // be mistaken for certified challenge evidence.
+    bool non_certified_preview = false;
 };
 
 struct SessionSummary {

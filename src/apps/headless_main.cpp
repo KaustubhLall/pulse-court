@@ -4,6 +4,7 @@
 #include "challenge_cli.hpp"
 #include "challenge_smoke.hpp"
 #include "scripted_policy.hpp"
+#include "pulse_policy.hpp"
 
 #include <chrono>
 #include <cstdint>
@@ -55,6 +56,44 @@ int main(int argc, char** argv) {
         policy.manifest_sha = "synthetic_manifest_sha";
         policy.certification_sha = "synthetic_cert_sha";
 
+        const bool preview_mode = !smoke_args.preview_bundle_path.empty();
+
+        // T4: non-certified preview mode. Loaded via the non-strict
+        // load_preview() path -- no manifest, no provenance, no
+        // certification gate. The loaded Policy drives the bot seat via
+        // pulse::ai::PolicyController inside run_smoke_game().
+        Policy preview_policy;
+        if (preview_mode) {
+            if (!preview_policy.load_preview(smoke_args.preview_bundle_path)) {
+                std::cerr << "Challenge smoke preview error: failed to load "
+                             "preview bundle '"
+                          << smoke_args.preview_bundle_path << "'\n";
+                return 1;
+            }
+            policy.checkpoint_id = "non_certified_preview";
+            policy.model_version = "preview";
+            policy.bundle_sha = preview_policy.bundle_sha256();
+            policy.manifest_sha = "";
+            policy.certification_sha = "";
+        } else if (std::filesystem::exists(smoke_args.bundle_path) &&
+                   std::filesystem::is_regular_file(smoke_args.bundle_path)) {
+            // T4: current/synthetic form (dummy bundle_path strings, as used
+            // by every existing test and the default synthetic policy above)
+            // is unaffected -- this strict-load attempt only triggers when
+            // --policy-bundle actually names a file on disk. The strict
+            // loader fails closed and prints its own diagnostic to stderr.
+            Policy strict_policy;
+            if (!strict_policy.load(smoke_args.bundle_path,
+                                    smoke_args.manifest_path)) {
+                std::cerr << "Challenge smoke error: strict policy load "
+                             "failed for bundle '"
+                          << smoke_args.bundle_path << "'\n";
+                return 1;
+            }
+            policy.bundle_sha = strict_policy.bundle_sha256();
+            policy.checkpoint_id = strict_policy.checkpoint_sha256();
+        }
+
         ChallengeSession session(policy, smoke_args.output_dir,
                                  smoke_args.games);
         if (!session.valid()) {
@@ -64,7 +103,11 @@ int main(int argc, char** argv) {
         }
 
         std::cout << "Running challenge smoke mode: " << smoke_args.games
-                  << " games\n";
+                  << " games";
+        if (preview_mode) {
+            std::cout << " [non_certified_preview=true]";
+        }
+        std::cout << "\n";
 
         for (std::int32_t game_idx = 0; game_idx < smoke_args.games;
              ++game_idx) {
@@ -74,8 +117,10 @@ int main(int argc, char** argv) {
 
             GameEvidence ev;
             std::string error;
+            const Policy* controller_policy =
+                preview_mode ? &preview_policy : nullptr;
             if (!run_smoke_game(policy, gs, game_idx, smoke_args.output_dir,
-                                ev, error)) {
+                                ev, error, controller_policy)) {
                 std::cerr << "Replay record failed: " << error << "\n";
                 return 1;
             }
@@ -86,13 +131,21 @@ int main(int argc, char** argv) {
                       << static_cast<int>(ev.human_score) << " - bot "
                       << static_cast<int>(ev.bot_score)
                       << " winner=" << static_cast<int>(ev.winner)
-                      << " replay=" << ev.replay_path << "\n";
+                      << " replay=" << ev.replay_path;
+            if (ev.non_certified_preview) {
+                std::cout << " non_certified_preview=true";
+            }
+            std::cout << "\n";
         }
 
         session.write_summary(ChallengeStatus::Complete);
         SessionSummary s = session.summary();
         std::cout << "Smoke complete. Bot wins: " << s.bot_wins
-                  << " Human wins: " << s.human_wins << "\n";
+                  << " Human wins: " << s.human_wins;
+        if (preview_mode) {
+            std::cout << " non_certified_preview=true";
+        }
+        std::cout << "\n";
         return 0;
     }
 
@@ -182,7 +235,7 @@ int main(int argc, char** argv) {
                                characters[0]),
                 scripted_input(static_cast<std::uint32_t>(i), 1,
                                characters[1])};
-            sim.step(in);
+            (void)sim.step(in);
         }
         auto end = std::chrono::steady_clock::now();
         auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(end -
@@ -210,7 +263,7 @@ int main(int argc, char** argv) {
         std::uint32_t t = static_cast<std::uint32_t>(i);
         std::array<FrameInput, 2> in = {scripted_input(t, 0, characters[0]),
                                         scripted_input(t, 1, characters[1])};
-        sim.step(in);
+        (void)sim.step(in);
         std::uint64_t h = sim.state_hash();
         if (hash_interval > 0 && ((i + 1) % hash_interval == 0)) {
             std::cout << "tick " << (i + 1) << " hash " << h << "\n";
@@ -244,7 +297,7 @@ int main(int argc, char** argv) {
     if (verify) {
         Simulation sim2(characters);
         for (std::int32_t i = 0; i < ticks; ++i) {
-            sim2.step(tape[i]);
+            (void)sim2.step(tape[i]);
             std::uint64_t h = sim2.state_hash();
             if (h != hashes[i]) {
                 std::cerr << "verify failed at tick " << tick_numbers[i]

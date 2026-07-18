@@ -5,6 +5,8 @@
 #include "pulse_replay.hpp"
 #include "pulse_sim.hpp"
 #include "scripted_policy.hpp"
+#include "pulse_policy.hpp"
+#include "pulse_policy_devgen.hpp"
 
 #include <cassert>
 #include <cstddef>
@@ -839,6 +841,145 @@ void test_smoke_determinism() {
     std::cout << "test_smoke_determinism passed\n";
 }
 
+// T4: --policy-bundle-preview parsing, incl. mutual exclusion with
+// --policy-bundle.
+void test_cli_headless_preview_args() {
+    // Preview flag alone satisfies the bundle requirement (no manifest
+    // needed) and parses cleanly.
+    const char* argv1[] = {"program", "--challenge-smoke",
+                            "--policy-bundle-preview", "preview.pzpb",
+                            "--games", "6", "--output-dir", "output"};
+    int argc1 = sizeof(argv1) / sizeof(argv1[0]);
+    ChallengeHeadlessArgs args1 = parse_challenge_headless_args(argc1, argv1);
+    assert(args1.smoke);
+    assert(args1.preview_bundle_path == "preview.pzpb");
+    assert(args1.bundle_path.empty());
+    assert(args1.games == 6);
+    assert(args1.output_dir == "output");
+    assert(args1.error.empty());
+
+    // Mutual exclusion: --policy-bundle and --policy-bundle-preview together
+    // is an error.
+    const char* argv2[] = {"program",
+                            "--challenge-smoke",
+                            "--policy-bundle",
+                            "bundle.pzb",
+                            "--policy-manifest",
+                            "manifest.json",
+                            "--policy-bundle-preview",
+                            "preview.pzpb",
+                            "--games",
+                            "6",
+                            "--output-dir",
+                            "output"};
+    int argc2 = sizeof(argv2) / sizeof(argv2[0]);
+    ChallengeHeadlessArgs args2 = parse_challenge_headless_args(argc2, argv2);
+    assert(!args2.error.empty());
+
+    // Duplicate --policy-bundle-preview is an error.
+    const char* argv3[] = {"program",
+                            "--challenge-smoke",
+                            "--policy-bundle-preview",
+                            "preview.pzpb",
+                            "--policy-bundle-preview",
+                            "preview2.pzpb",
+                            "--games",
+                            "6",
+                            "--output-dir",
+                            "output"};
+    int argc3 = sizeof(argv3) / sizeof(argv3[0]);
+    ChallengeHeadlessArgs args3 = parse_challenge_headless_args(argc3, argv3);
+    assert(!args3.error.empty());
+
+    // Neither --policy-bundle nor --policy-bundle-preview given is an error.
+    const char* argv4[] = {"program", "--challenge-smoke", "--games", "6",
+                            "--output-dir", "output"};
+    int argc4 = sizeof(argv4) / sizeof(argv4[0]);
+    ChallengeHeadlessArgs args4 = parse_challenge_headless_args(argc4, argv4);
+    assert(!args4.error.empty());
+
+    std::cout << "test_cli_headless_preview_args passed\n";
+}
+
+// T4: build an in-memory non-certified dev bundle (patterned weights),
+// save it to a temp file, run the preview smoke path for a couple of
+// games, and assert completion + replay recorded + games.jsonl carries
+// "non_certified_preview":true.
+void test_smoke_preview_mode() {
+    PolicyMetadata policy;
+    policy.checkpoint_id = "test";
+    policy.model_version = "v1.0";
+    policy.bundle_sha = "abc";
+    policy.manifest_sha = "def";
+    policy.certification_sha = "ghi";
+
+    std::filesystem::path test_dir = "test_challenge_output_preview";
+    std::filesystem::remove_all(test_dir);
+    std::filesystem::create_directories(test_dir);
+
+    // Build a non-certified synthetic bundle with patterned (non-zero)
+    // weights so the network produces varied greedy actions.
+    std::vector<unsigned char> bundle_bytes =
+        devgen::build_synthetic_bundle(0, devgen::WeightPattern::Patterned);
+
+    std::filesystem::path bundle_path = test_dir / "dev.pzpb";
+    {
+        std::ofstream out(bundle_path, std::ios::binary);
+        assert(out.good());
+        out.write(reinterpret_cast<const char*>(bundle_bytes.data()),
+                  static_cast<std::streamsize>(bundle_bytes.size()));
+    }
+
+    Policy preview_policy;
+    bool loaded = preview_policy.load_preview(bundle_path.string());
+    assert(loaded);
+    (void)loaded;
+
+    ChallengeSession session(policy, test_dir / "logs", 20);
+    assert(session.valid());
+
+    for (std::int32_t game_idx = 0; game_idx < 2; ++game_idx) {
+        GameSchedule gs = session.schedule_game(game_idx);
+        bool started = session.start_game(game_idx);
+        assert(started);
+        (void)started;
+
+        GameEvidence ev;
+        std::string error;
+        bool ok = run_smoke_game(policy, gs, game_idx, test_dir / "logs", ev,
+                                 error, &preview_policy);
+        assert(ok);
+        (void)ok;
+        assert(error.empty());
+        assert(ev.non_certified_preview);
+
+        std::filesystem::path replay_file =
+            (test_dir / "logs") / ev.replay_path;
+        assert(std::filesystem::exists(replay_file));
+        assert(std::filesystem::file_size(replay_file) > 0);
+
+        session.record_game_result(ev);
+    }
+
+    SessionSummary s = session.summary();
+    assert(s.completed_games == 2);
+
+    std::ifstream in(test_dir / "logs" / "games.jsonl");
+    assert(in.good());
+    std::string line;
+    int tagged_lines = 0;
+    while (std::getline(in, line)) {
+        if (line.find("\"non_certified_preview\":true") != std::string::npos) {
+            ++tagged_lines;
+        }
+    }
+    in.close();
+    assert(tagged_lines == 2);
+
+    std::filesystem::remove_all(test_dir);
+    std::cout << "test_smoke_preview_mode passed\n";
+}
+
 void run_all_tests() {
     std::cout << "Running challenge tests...\n";
     test_character_name();
@@ -850,6 +991,7 @@ void run_all_tests() {
     test_incomplete_seat_mismatch();
     test_cli_viewer_args();
     test_cli_headless_args();
+    test_cli_headless_preview_args();
     test_cli_validation();
     test_cli_headless_validation();
     test_policy_controller_reset();
@@ -868,6 +1010,8 @@ void run_all_tests() {
     test_replay_version_rejection();
     std::cout.flush();
     test_smoke_determinism();
+    std::cout.flush();
+    test_smoke_preview_mode();
     std::cout.flush();
     std::cout << "All challenge tests passed!\n";
 }

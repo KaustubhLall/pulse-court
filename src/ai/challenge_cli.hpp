@@ -21,6 +21,10 @@ struct ChallengeHeadlessArgs {
     bool smoke = false;
     std::string bundle_path;
     std::string manifest_path;
+    // T4: non-certified preview bundle path, set by --policy-bundle-preview.
+    // Mutually exclusive with --policy-bundle/bundle_path. Empty means
+    // preview mode was not requested.
+    std::string preview_bundle_path;
     std::int32_t games = 0;
     std::string output_dir;
     std::string error;

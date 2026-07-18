@@ -2,9 +2,12 @@
 
 #include "scripted_policy.hpp"
 #include "pulse_replay.hpp"
+#include "pulse_policy.hpp"
+#include "pulse_policy_adapter.hpp"
 
 #include <array>
 #include <iomanip>
+#include <memory>
 #include <sstream>
 
 namespace pulse {
@@ -51,16 +54,26 @@ FrameInput scripted_input(std::uint32_t tick, std::size_t player,
 bool run_smoke_game(const PolicyMetadata& policy, const GameSchedule& gs,
                     std::int32_t game_index,
                     const std::filesystem::path& output_dir, GameEvidence& out,
-                    std::string& error) {
+                    std::string& error, const Policy* preview_policy) {
     std::int32_t human_seat = gs.human_seat;
     std::int32_t bot_seat = gs.bot_seat;
 
     MatchConfig config;
     config.score_to_win = 1;  // explicit score-to-one for smoke
     Simulation sim(gs.characters, config);
+
+    // Scripted mode (default): historical ScriptedPolicyController path, no
+    // network involved. Preview mode: real 12-tick-cadence network inference
+    // via pulse::ai::PolicyController wrapping *preview_policy.
     ScriptedPolicyController controller(policy, bot_seat, gs.characters[bot_seat],
                                 gs.characters[human_seat]);
     controller.reset(sim.state());
+
+    std::unique_ptr<ai::PolicyController> preview_controller;
+    if (preview_policy != nullptr) {
+        preview_controller = std::make_unique<ai::PolicyController>(*preview_policy);
+        preview_controller->reset();
+    }
 
     Replay replay;
     replay.characters = gs.characters;
@@ -72,7 +85,13 @@ bool run_smoke_game(const PolicyMetadata& policy, const GameSchedule& gs,
         std::array<FrameInput, 2> in = {};
         in[human_seat] = scripted_input(tick, human_seat,
                                         gs.characters[human_seat]);
-        in[bot_seat] = controller.decide(sim.state(), tick, bot_seat);
+        if (preview_controller) {
+            in[bot_seat] = preview_controller
+                               ->act(sim.state(), static_cast<std::size_t>(bot_seat))
+                               .input;
+        } else {
+            in[bot_seat] = controller.decide(sim.state(), tick, bot_seat);
+        }
 
         StepResult result = sim.step(in);
 
@@ -111,6 +130,7 @@ bool run_smoke_game(const PolicyMetadata& policy, const GameSchedule& gs,
     out.bot_score = static_cast<std::int8_t>(state.score[bot_seat]);
     out.final_state_hash = std::to_string(sim.state_hash());
     out.replay_path = filename;
+    out.non_certified_preview = (preview_policy != nullptr);
 
     return true;
 }
