@@ -1,3 +1,4 @@
+#include "test_no_dialogs.hpp"
 #include "challenge_session.hpp"
 #include "challenge_cli.hpp"
 #include "challenge_smoke.hpp"
@@ -99,12 +100,13 @@ void test_game_evidence_recording() {
     assert(!session.start_game(0)); // duplicate
     assert(!session.start_game(2)); // skip
 
+    GameSchedule gs0 = session.schedule_game(0);
     GameEvidence ev;
     ev.game_index = 0;
-    ev.characters = {Character::Kite, Character::Vale};
-    ev.human_seat = 0;
-    ev.bot_seat = 1;
-    ev.winner = 0;
+    ev.characters = gs0.characters;
+    ev.human_seat = gs0.human_seat;
+    ev.bot_seat = gs0.bot_seat;
+    ev.winner = gs0.human_seat;
     ev.human_score = 1;
     ev.bot_score = 0;
     ev.final_state_hash = "hash123";
@@ -142,7 +144,7 @@ void test_gate_conditions() {
         session.start_game(i);
         GameEvidence ev;
         ev.game_index = i;
-        ev.characters = {Character::Kite, Character::Vale};
+        ev.characters = session.schedule_game(i).characters;
         ev.human_seat = i % 2;
         ev.bot_seat = 1 - ev.human_seat;
         ev.winner = ev.human_seat; // human wins all
@@ -168,7 +170,7 @@ void test_gate_conditions() {
         session2.start_game(i);
         GameEvidence ev;
         ev.game_index = i;
-        ev.characters = {Character::Kite, Character::Vale};
+        ev.characters = session2.schedule_game(i).characters;
         ev.human_seat = i % 2;
         ev.bot_seat = 1 - ev.human_seat;
         ev.winner = ev.bot_seat; // bot wins all
@@ -209,7 +211,7 @@ void test_file_integrity() {
     session.start_game(0);
     GameEvidence ev;
     ev.game_index = 0;
-    ev.characters = {Character::Kite, Character::Vale};
+    ev.characters = session.schedule_game(0).characters;
     ev.human_seat = 0;
     ev.bot_seat = 1;
     ev.winner = 0;
@@ -271,7 +273,7 @@ void test_incomplete_seat_mismatch() {
     session.start_game(0);
     GameEvidence ev;
     ev.game_index = 0;
-    ev.characters = {Character::Kite, Character::Vale};
+    ev.characters = session.schedule_game(0).characters;
     ev.human_seat = 0;
     ev.bot_seat = 1;
     ev.winner = 0;
@@ -561,7 +563,7 @@ void test_session_reset_discard() {
     session.start_game(0);
     GameEvidence ev;
     ev.game_index = 0;
-    ev.characters = {Character::Kite, Character::Vale};
+    ev.characters = session.schedule_game(0).characters;
     ev.human_seat = 0;
     ev.bot_seat = 1;
     ev.winner = 0;
@@ -613,7 +615,7 @@ void test_session_partial_summary() {
         session.start_game(i);
         GameEvidence ev;
         ev.game_index = i;
-        ev.characters = {Character::Kite, Character::Vale};
+        ev.characters = session.schedule_game(i).characters;
         ev.human_seat = i % 2;
         ev.bot_seat = 1 - ev.human_seat;
         ev.winner = ev.human_seat;
@@ -874,6 +876,7 @@ void run_all_tests() {
 } // namespace pulse
 
 int main() {
+    pulse::test::disable_error_dialogs();
     pulse::test::run_all_tests();
     return 0;
 }

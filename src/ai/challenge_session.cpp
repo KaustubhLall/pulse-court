@@ -97,6 +97,17 @@ void ChallengeSession::record_game_result(const GameEvidence& evidence) {
     if (evidence.game_index != current_game_index_) {
         return;
     }
+    // Reject duplicate results and evidence whose seats or characters
+    // disagree with the pre-committed schedule.
+    if (static_cast<std::int32_t>(games_.size()) != evidence.game_index) {
+        return;
+    }
+    const GameSchedule expected = schedule_game(evidence.game_index);
+    if (evidence.human_seat != expected.human_seat ||
+        evidence.bot_seat != expected.bot_seat ||
+        evidence.characters != expected.characters) {
+        return;
+    }
     games_.push_back(evidence);
     append_game_line(evidence);
     flush();

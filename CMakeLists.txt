@@ -29,11 +29,20 @@ add_library(pulse_policy
 target_include_directories(pulse_policy PUBLIC src/ai)
 target_link_libraries(pulse_policy PRIVATE pulse_ai pulse_core)
 
+# TEST/DEV ONLY -- NON-CERTIFIED synthetic bundle generator, kept as its own
+# library so it is not linked into production/certified consumers of
+# pulse_policy by accident.
+add_library(pulse_policy_devgen
+    src/ai/pulse_policy_devgen.cpp
+)
+target_include_directories(pulse_policy_devgen PUBLIC src/ai)
+
 add_library(pulse_challenge
     src/ai/challenge_session.cpp
     src/ai/challenge_cli.cpp
     src/ai/scripted_policy.cpp
     src/ai/challenge_smoke.cpp
+    src/ai/challenge_protocol.cpp
 )
 
 target_include_directories(pulse_challenge PUBLIC src/ai)
@@ -43,6 +52,7 @@ if(MSVC)
     target_compile_options(pulse_core PRIVATE /W4 /permissive- /EHsc /Zc:__cplusplus)
     target_compile_options(pulse_ai PRIVATE /W4 /permissive- /EHsc /Zc:__cplusplus)
     target_compile_options(pulse_policy PRIVATE /W4 /permissive- /EHsc /Zc:__cplusplus)
+    target_compile_options(pulse_policy_devgen PRIVATE /W4 /permissive- /EHsc /Zc:__cplusplus)
     target_compile_options(pulse_challenge PRIVATE /W4 /permissive- /EHsc /Zc:__cplusplus)
 else()
     target_compile_options(pulse_core PRIVATE -Wall -Wextra -Wpedantic -Wconversion)
@@ -55,6 +65,13 @@ add_executable(pulse_policy_verify src/apps/policy_verify_main.cpp)
 target_link_libraries(pulse_policy_verify PRIVATE pulse_policy pulse_ai pulse_core)
 if(MSVC)
     target_compile_options(pulse_policy_verify PRIVATE /W4 /permissive- /EHsc /Zc:__cplusplus)
+endif()
+
+# TEST/DEV ONLY -- NON-CERTIFIED synthetic bundle/golden generator CLI.
+add_executable(pulse_dev_bundle src/apps/dev_bundle_main.cpp)
+target_link_libraries(pulse_dev_bundle PRIVATE pulse_policy pulse_policy_devgen pulse_ai pulse_core)
+if(MSVC)
+    target_compile_options(pulse_dev_bundle PRIVATE /W4 /permissive- /EHsc /Zc:__cplusplus)
 endif()
 
 if(WIN32 AND PULSE_BUILD_VIEWER)
@@ -95,9 +112,16 @@ if(BUILD_TESTING)
     add_test(NAME pulse_challenge_tests COMMAND pulse_challenge_tests)
 
     add_executable(pulse_policy_tests tests/policy_tests.cpp)
-    target_link_libraries(pulse_policy_tests PRIVATE pulse_policy pulse_ai pulse_core)
+    target_link_libraries(pulse_policy_tests PRIVATE pulse_policy pulse_policy_devgen pulse_ai pulse_core)
     if(MSVC)
         target_compile_options(pulse_policy_tests PRIVATE /W4 /permissive- /EHsc /Zc:__cplusplus)
     endif()
     add_test(NAME pulse_policy_tests COMMAND pulse_policy_tests)
+
+    add_executable(pulse_challenge_protocol_tests tests/challenge_protocol_tests.cpp)
+    target_link_libraries(pulse_challenge_protocol_tests PRIVATE pulse_core pulse_challenge)
+    if(MSVC)
+        target_compile_options(pulse_challenge_protocol_tests PRIVATE /W4 /permissive- /EHsc /Zc:__cplusplus)
+    endif()
+    add_test(NAME pulse_challenge_protocol_tests COMMAND pulse_challenge_protocol_tests)
 endif()

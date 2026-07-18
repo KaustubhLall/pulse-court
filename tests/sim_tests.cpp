@@ -1,3 +1,4 @@
+#include "test_no_dialogs.hpp"
 #include "fixed_math.hpp"
 #include "pulse_replay.hpp"
 #include "pulse_sim.hpp"
@@ -903,6 +904,7 @@ void test_events_non_authoritative() {
 }  // namespace pulse
 
 int main() {
+    pulse::test::disable_error_dialogs();
     using namespace pulse::tests;
     test_fixed_math();
     test_determinism();
