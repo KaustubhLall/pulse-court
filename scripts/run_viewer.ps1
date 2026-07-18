@@ -24,6 +24,18 @@
 .PARAMETER Right
     Direct character selection for player 2 (kite, vale, bastion).
 
+.PARAMETER Replay
+    Path to a .pulse replay file: launches the historical visualizer
+    (Space pause, Right step, +/- speed, R restart, Esc quit).
+
+.PARAMETER ChallengePreviewBundle
+    Path to a NON-CERTIFIED dev .pzpb bundle (from pulse_dev_bundle.exe):
+    launches the 20-game challenge in preview mode. Requires
+    -ChallengeLogDir pointing at a fresh directory.
+
+.PARAMETER ChallengeLogDir
+    Fresh log directory for the challenge session (append-only evidence).
+
 .PARAMETER D2D
     Launch with the Direct2D spike flag (--d2d-spike). Short-circuits
     render() into drawing one sprite via Direct2D instead of the normal GDI
@@ -47,7 +59,16 @@ param(
     [string]$Right = $null,
 
     [Parameter()]
-    [switch]$D2D
+    [switch]$D2D,
+
+    [Parameter()]
+    [string]$Replay = $null,
+
+    [Parameter()]
+    [string]$ChallengePreviewBundle = $null,
+
+    [Parameter()]
+    [string]$ChallengeLogDir = $null
 )
 
 $ErrorActionPreference = 'Stop'
@@ -73,7 +94,17 @@ if (-not (Test-Path $assets -PathType Container)) {
 }
 
 $argList = @()
-if ($Left -and $Right) {
+if ($Replay) {
+    $argList += '--replay'
+    $argList += $Replay
+} elseif ($ChallengePreviewBundle) {
+    if (-not $ChallengeLogDir) {
+        Write-Error "-ChallengePreviewBundle requires -ChallengeLogDir (must be a fresh directory)"
+        exit 1
+    }
+    $argList += @('--challenge', '--policy-bundle-preview', $ChallengePreviewBundle,
+                  '--challenge-games', '20', '--challenge-log-dir', $ChallengeLogDir)
+} elseif ($Left -and $Right) {
     $argList += '--left'
     $argList += $Left.ToLower()
     $argList += '--right'
