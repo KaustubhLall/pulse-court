@@ -73,6 +73,75 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# Start-Process -ArgumentList joins an array into one command-line string on
+# Windows PowerShell 5.1. Quote every token using the CommandLineToArgvW
+# backslash/quote rules so paths with spaces, embedded quotes, or trailing
+# backslashes remain one argument after the viewer parses its command line.
+function ConvertTo-StartProcessArgument {
+    param(
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$Value
+    )
+
+    if ($null -eq $Value) {
+        return '""'
+    }
+
+    $builder = New-Object System.Text.StringBuilder
+    [void]$builder.Append('"')
+    $backslashCount = 0
+
+    for ($i = 0; $i -lt $Value.Length; $i++) {
+        $character = $Value[$i]
+        if ($character -eq '\') {
+            $backslashCount++
+            continue
+        }
+
+        if ($character -eq '"') {
+            # Backslashes before a quote must be doubled, then one more
+            # backslash escapes the quote itself.
+            for ($j = 0; $j -lt (($backslashCount * 2) + 1); $j++) {
+                [void]$builder.Append('\')
+            }
+            [void]$builder.Append('"')
+            $backslashCount = 0
+            continue
+        }
+
+        for ($j = 0; $j -lt $backslashCount; $j++) {
+            [void]$builder.Append('\')
+        }
+        [void]$builder.Append($character)
+        $backslashCount = 0
+    }
+
+    # Backslashes immediately before the closing quote must also be doubled.
+    for ($j = 0; $j -lt ($backslashCount * 2); $j++) {
+        [void]$builder.Append('\')
+    }
+    [void]$builder.Append('"')
+    return $builder.ToString()
+}
+
+function ConvertTo-LauncherAbsolutePath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    # Start-Process changes the child working directory to the build output.
+    # Resolve caller-relative paths first so -Replay, the preview bundle, and
+    # the log directory keep the meaning they had at the PowerShell prompt.
+    if ([System.IO.Path]::IsPathRooted($Path)) {
+        return [System.IO.Path]::GetFullPath($Path)
+    }
+    return [System.IO.Path]::GetFullPath(
+        (Join-Path (Get-Location).Path $Path)
+    )
+}
+
 $repoRoot = $PSScriptRoot
 if ($repoRoot -and (Test-Path (Join-Path $repoRoot '..' -Resolve))) {
     $repoRoot = (Resolve-Path (Join-Path $repoRoot '..')).Path
@@ -96,14 +165,16 @@ if (-not (Test-Path $assets -PathType Container)) {
 $argList = @()
 if ($Replay) {
     $argList += '--replay'
-    $argList += $Replay
+    $argList += (ConvertTo-LauncherAbsolutePath $Replay)
 } elseif ($ChallengePreviewBundle) {
     if (-not $ChallengeLogDir) {
         Write-Error "-ChallengePreviewBundle requires -ChallengeLogDir (must be a fresh directory)"
         exit 1
     }
-    $argList += @('--challenge', '--policy-bundle-preview', $ChallengePreviewBundle,
-                  '--challenge-games', '20', '--challenge-log-dir', $ChallengeLogDir)
+    $argList += @('--challenge', '--policy-bundle-preview',
+                  (ConvertTo-LauncherAbsolutePath $ChallengePreviewBundle),
+                  '--challenge-games', '20', '--challenge-log-dir',
+                  (ConvertTo-LauncherAbsolutePath $ChallengeLogDir))
 } elseif ($Left -and $Right) {
     $argList += '--left'
     $argList += $Left.ToLower()
@@ -127,13 +198,16 @@ if ($D2D) {
 }
 
 Write-Host "Launching Pulse Court..." -ForegroundColor Green
-Write-Host "  $exe $argList" -ForegroundColor Gray
+$processArgList = @($argList | ForEach-Object {
+    ConvertTo-StartProcessArgument $_
+})
+Write-Host "  $exe $($processArgList -join ' ')" -ForegroundColor Gray
 
 if ($Passive) {
     Write-Host "  (passive mode is observer-only; the window will not activate)" -ForegroundColor Gray
 }
 
-$proc = Start-Process -FilePath $exe -ArgumentList $argList -WorkingDirectory $baseDir -PassThru -NoNewWindow
+$proc = Start-Process -FilePath $exe -ArgumentList $processArgList -WorkingDirectory $baseDir -PassThru -NoNewWindow
 
 # In passive/monitor mode the process should remain open. If it exits quickly,
 # a likely cause is an unmatched monitor name; surface that to the caller.
