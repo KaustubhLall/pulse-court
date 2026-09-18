@@ -1,0 +1,13 @@
+Test project <repo>/build/debug
+    Start 1: pulse_tests
+1/4 Test #1: pulse_tests ......................   Passed    0.15 sec
+    Start 2: pulse_challenge_tests
+2/4 Test #2: pulse_challenge_tests ............   Passed   17.18 sec
+    Start 3: pulse_policy_tests
+3/4 Test #3: pulse_policy_tests ...............   Passed    5.61 sec
+    Start 4: pulse_challenge_protocol_tests
+4/4 Test #4: pulse_challenge_protocol_tests ...   Passed    0.30 sec
+
+100% tests passed, 0 tests failed out of 4
+
+Total Test time (real) =  23.27 sec

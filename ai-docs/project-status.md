@@ -1,5 +1,19 @@
 # Pulse Court project status
 
+## Current checkpoint — 2026-09-18
+
+Branch `codex/preview-runtime-fixes`, executable source `661f35d`.
+The launcher, strict runtime compatibility, and smoke-controller fixes below
+are implemented and reviewed. Release/Debug builds and all four suites in
+each configuration pass. Six synthetic-policy games recorded 9,483 native
+decisions; all six replays verified. Explicit scripted smoke recorded zero
+network decisions and missing strict files failed before evidence creation.
+
+The [portfolio handoff](portfolio-handoff-2026-09-18/README.md) contains the
+reproducible results, claim limits, and a verified standalone replay. This is
+a development checkpoint; the deferred integration, certification, browser,
+and rendering work below remains open.
+
 ## Audit checkpoint — 2026-09-18
 
 Base: `454dd6b` on the local `d2d-migration` branch. This audit precedes the

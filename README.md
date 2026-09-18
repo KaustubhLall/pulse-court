@@ -1,9 +1,14 @@
 # Pulse Court
 
-A deterministic, headless-first 1v1 arena-striker foundation. This first
-vertical slice provides the authoritative simulation, replay system, headless
-benchmark/verification tool, and a native Win32/GDI viewer. It intentionally
-does **not** contain AI, neural nets, bots, networking, or 2v2/3v3 gameplay.
+A deterministic, headless-first 1v1 arena-striker game with a native Windows
+viewer, hash-verified replay, FP32 policy inference, and a non-certified
+challenge preview. The simulator is ruleset v2. Strict Pulse Zero deployment
+requires ruleset v4 and is blocked in this build; preview results establish
+tooling behavior, not trained-model strength or certification.
+
+Gallery and setup render through Direct2D; gameplay still uses GDI/GDI+.
+Networking and 2v2/3v3 gameplay remain deferred. Current scope and known gaps
+are recorded in [the project status](ai-docs/project-status.md).
 
 Pulse Court is an original project. It is not affiliated with Omega Strikers
 or Odyssey Interactive, and it uses no copied characters, maps, assets,
@@ -18,7 +23,7 @@ core-reflecting Pulse Gate.
 - Court: 38 by 22 world units, with goal mouths centered on the two short sides
   between y=8 and y=14.
 - Simulation: 120 Hz fixed tick rate with deterministic integer/fixed-point physics.
-- Decision cadence: 10 Hz (every 12 simulation ticks) for future AI policy refresh;
+- Decision cadence: 10 Hz (every 12 simulation ticks) for policy refresh;
   human/viewer input is not throttled.
 - Event stream: optional fixed-capacity (16 events) non-authoritative telemetry for
   visualizers; does not affect state, replay, or hashing.
@@ -45,9 +50,13 @@ cmake --build build/release --config Release
 ## Test
 
 ```cmd
-cd build/release
-ctest -C Release --output-on-failure
+ctest --test-dir build/release -C Release --output-on-failure
 ```
+
+Also configure/build the `vs-x64-debug` preset and run
+`ctest --test-dir build/debug -C Debug --output-on-failure`; Debug assertions
+are part of the verification gate. Launcher argument forwarding has a separate
+check: `powershell -ExecutionPolicy Bypass -File scripts/tests/test_run_viewer_arguments.ps1`.
 
 Or run the test executable directly:
 
@@ -64,6 +73,38 @@ build\release\Release\pulse_headless.exe --replay game.pulse
 build\release\Release\pulse_headless.exe --benchmark 100000 --left kite --right bastion
 build\release\Release\pulse_headless.exe --ticks 10000 --hash-interval 1000
 ```
+
+### Policy preview and smoke evidence
+
+Generate a deterministic **synthetic, untrained** bundle for tooling checks,
+then run six games with actual native policy inference:
+
+```powershell
+New-Item -ItemType Directory -Path 'build/preview demo'
+& 'build/release/Release/pulse_dev_bundle.exe' 'build/preview demo/dev'
+& 'build/release/Release/pulse_headless.exe' --challenge-smoke --policy-bundle-preview 'build/preview demo/dev.pzpb' --games 6 --output-dir 'build/preview demo/smoke'
+.\scripts\run_viewer.ps1 -Replay 'build/preview demo/smoke/game_000.pulse'
+```
+
+Use fresh output names; existing evidence is not overwritten. The smoke log
+records controller mode and network decision count, and each game saves a
+replay that can be independently verified with `pulse_headless --replay`.
+The smoke opponent is scripted and is not a human performance test.
+
+Scripted-only smoke is explicit: `--challenge-smoke --scripted-policy --games 6
+--output-dir <fresh-directory>`. A missing strict bundle is an error; it never
+selects a scripted fallback. Strict `--policy-bundle` plus `--policy-manifest`
+is reserved for a simulator compatible with the policy contract.
+
+For an interactive preview using the generated bundle:
+
+```powershell
+.\scripts\run_viewer.ps1 -ChallengePreviewBundle 'build/preview demo/dev.pzpb' -ChallengeLogDir 'build/preview demo/human-session'
+```
+
+This runs the existing 20-game viewer protocol with a non-certified preview
+label. It is separate from the six-game headless smoke and does not certify a
+policy. A self-play/champion-selection browser is not implemented.
 
 ## Viewer
 
@@ -134,8 +175,10 @@ Mouse clicks on a card select that hero for that player. Press **Start Match**
 | | | Hitbox overlay: F1 |
 | | | Animation debug: F2 |
 | | | Pseudo-3D compression: F3 |
+| | | D2D spike toggle: F4 |
 | | | Bot P2: B |
 | | | Sim speed: `[` / `]` |
+| | | Render cap: `-` / `=` |
 
 Aim defaults to the current movement direction; when movement is neutral the
 player keeps its last facing.
@@ -157,7 +200,10 @@ paths, column counts, row counts, and frame conventions used by the viewer.
 `file` values are relative to the `assets/` directory (sprite sheets live under
 `sprites/animated/`; `arena.png` lives at the `assets/` root).
 
-The viewer loads PNGs via GDI+ once at startup. Missing or invalid assets fall
+The runtime loads baked sheets from `assets/sprites/display/`; the source-art
+manifest and `scripts/bake_display_sprites.py` describe the bake pipeline.
+The viewer retains GDI+ images for gameplay and D2D bitmaps for gallery/setup.
+Missing or invalid assets fall
 back to the procedural renderer (colored circles, lines, goal flash, etc.) and
 the footer prints status text for the missing item. The assets are not linked
 into the headless build or tests.
@@ -204,7 +250,8 @@ creating or overwriting the shortcut.
 - **Viewer smoke-tested** — `pulse_viewer.exe` builds and renders the court
   and sidebar in a live Win32 window. Reset/quit controls are implemented but
   still need a human keyboard pass; feel balancing remains separate.
-- **Deferred intentionally** — AI/training, additional team sizes, networking,
+- **Deferred intentionally** — certified policy deployment, the self-play
+  replay browser, D2D gameplay conversion, additional team sizes, networking,
   gamepad support, audio, polish tuning, and comparison with any commercial
   game.
 
@@ -214,3 +261,5 @@ creating or overwriting the shortcut.
 - `docs/architecture.md` — determinism, resolution order, and state contract.
 - `docs/verification.md` — verification target and labels.
 - `docs/replay-format.md` — binary replay file layout.
+- `docs/d2d-migration-plan.md` — remaining rendering migration and acceptance gates.
+- `ai-docs/project-status.md` — current project checkpoint and remaining work.

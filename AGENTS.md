@@ -170,12 +170,16 @@ Brick-by-brick: a flag-gated spike first, then per-screen-mode cutovers
 functional until the final removal task, so any brick can be reverted
 cleanly by returning to `isometric-experiment`.
 
-**Task 1 (checkpoint) and Task 2 (spike) done.** Task 2 added
+**Tasks 1-4 implemented; gameplay migration remains open.** The checkpoint,
+spike, gallery cutover (`ed3fd57`), and setup cutover (`293d3a4`) are committed.
+Gallery/setup use D2D by default; gameplay retains the GDI capped-buffer path.
+The historical spike measurements below do not establish gameplay performance.
+Task 2 added
 `src/apps/viewer_d2d.{hpp,cpp}` (`D2DContext`: `ID2D1Factory`,
 `IDWriteFactory`, `IWICImagingFactory`, `ID2D1HwndRenderTarget`, one shared
 brush, all `Microsoft::WRL::ComPtr`) and a `--d2d-spike` flag that
 short-circuits `render()` into drawing one sprite (`assets/arena.png`) via
-Direct2D; the GDI path is untouched when the flag is absent. Two lifecycle
+Direct2D; it originally left the GDI path untouched when absent. Two lifecycle
 traps found by manual review and fixed (both are exactly the "cheap-looking
 wrap that isn't" class of bug this project has hit before with GDI+):
 
@@ -212,15 +216,17 @@ this app's `GetDC`+`BitBlt` rendering style (bypasses `WM_PAINT`/DWM
 redirection — see memory), and the device-loss hotkey restarts the graphics
 driver system-wide. Crash-safety (resize stress, launch/exit with and
 without the flag) was verified via process-liveness smoke tests.
-Tasks 3+ (gallery/setup/gameplay cutover) do not proceed until the user
-confirms these.
+Tasks 3-4 were implemented later, but confirmation of these visual/device-loss
+checks was not found in the September readiness audit. Reconcile that evidence
+before the task-5 gameplay cutover; do not silently mark the gates passed.
 
 ## Key Scope Boundaries
 
 - `src/core/` is the deterministic simulation; avoid viewer-only changes there.
 - `src/apps/viewer_win32.cpp` owns the window, input, layout, and render loop.
-- `src/apps/viewer_assets.cpp` owns GDI+ sprite loading/drawing and the
+- `src/apps/viewer_assets.cpp` owns GDI+/D2D sprite loading/drawing and the
   procedural fallback.
+- `src/apps/viewer_d2d.cpp` owns Direct2D/DirectWrite/WIC resources.
 - `src/apps/viewer_monitor.cpp` owns monitor enumeration and placement.
 
 ## Notes
@@ -271,8 +277,11 @@ write there).
 
 - `pulse_policy.{hpp,cpp}` — real PZPB bundle loader (fail-closed strict
   `Policy::load`, non-certified `load_preview`) + FP32 MLP inference.
-  Strict load correctly FAILS on this tree today: main's core is ruleset 2,
-  certified bundles declare ruleset 4 (core merge is a known follow-up).
+  Strict loading is blocked while the compiled core is ruleset 2 and the
+  supported policy contract is ruleset 4 (core merge is a follow-up).
+  The September runtime fix adds the compiled-ruleset guard; the original
+  July implementation checked only literal manifest ruleset 4 and did not
+  enforce this boundary despite the previous wording here.
   `pulse_core_compat.hpp` documents the degraded touch-kind shim.
 - `pulse_policy_devgen` + `pulse_dev_bundle.exe` — deterministic
   NON-CERTIFIED dev bundles for structural testing only.
@@ -281,11 +290,17 @@ write there).
   and `pulse::challenge::ChallengeSession` (`challenge_protocol.hpp`,
   integrity/provenance protocol session used by the viewer). Consolidation
   is a known follow-up; don't half-merge them.
-- Headless: `pulse_headless --challenge-smoke` (scripted synthetic, or
-  `--policy-bundle-preview <pzpb>` for real preview inference); records
+- Headless: `pulse_headless --challenge-smoke` with explicit `--scripted-policy`, or
+  `--policy-bundle-preview <pzpb>` for real preview inference; records
   per-game `.pulse` replays. Viewer: `--replay <file.pulse>` historical
   visualizer; `--challenge` runs the 20-game protocol (strict or preview
   bundle), append-only logs, quit-after-completion is legitimate.
+  Strict smoke must retain and execute its loaded policy; missing strict
+  bundle paths are errors, never an implicit request for scripted mode.
+  Smoke evidence records controller mode and network decisions. Six-game
+  smoke is separate from the human challenge and never establishes AI strength.
+
+Current checkpoints and remaining scope: `ai-docs/project-status.md`.
 
 ### Session conventions (hard-won)
 

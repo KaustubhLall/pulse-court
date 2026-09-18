@@ -52,8 +52,9 @@ of `pulse_core`.
 ## Determinism guarantees
 
 - Fixed 120 Hz tick rate with no wall-clock dependence.
-- Future AI policies refresh at 10 Hz (every 12 simulation ticks) via the
-  `decision_boundary` flag; this does not throttle human inputs or change physics.
+- Native policy controllers refresh at a 12-tick cadence, with immediate
+  refresh on initialization/phase change; this does not throttle human inputs
+  or change physics.
 - The core's velocity is integrated exactly once per simulation tick, divided
   across two collision substeps; substeps cannot multiply travel distance.
 - No allocation inside `Simulation::step`.
@@ -102,9 +103,16 @@ an intentional deferred feature, not a claimed capability.
 ## Boundaries
 
 - `pulse_core` (library) has no OS, window, or rendering dependencies.
-- `pulse_headless` is a command-line harness with a deterministic scripted
-  input tape; it contains no AI.
-- `pulse_viewer` is a Win32/GDI visualizer that links `pulse_core`,
+- `pulse_ai` and `pulse_policy` own observations, legal actions, FP32 inference,
+  and the policy controller. Strict loading requires the compiled simulator to
+  match the policy's supported ruleset. This root checkout is v2; the separate
+  training lineage is v4. `pulse_core_compat.hpp` is a lossy preview shim, not
+  evidence of training-environment parity.
+- `pulse_headless` links the core, AI/policy, and challenge libraries. It can
+  run a deterministic scripted tape or explicit policy smoke modes; it has no
+  rendering or viewer-asset dependencies.
+- `pulse_viewer` uses D2D for gallery/setup and GDI/GDI+ for gameplay. It links
+  `pulse_core`, the challenge/policy libraries,
   `user32`, `gdi32`, `gdiplus`, `d2d1`, `dwrite`, `windowscodecs`, and `ole32`.
   It renders at 60 FPS using a fixed-step accumulator that
   advances the authoritative 120 Hz simulation independently. The viewer
@@ -112,3 +120,11 @@ an intentional deferred feature, not a claimed capability.
   but none of these enter the core simulation, replay system, or state hashing.
   The viewer consumes StepEvents for visual feedback and action tracing but
   never mutates core state or feeds back into simulation decisions.
+
+## Challenge evidence
+
+The headless `pulse::ChallengeSession` is a smoke logger. The viewer's
+`pulse::challenge::ChallengeSession` owns the separate 20-game protocol.
+They remain separate; six completed smoke games are not a completed human
+challenge. Preview runs are explicitly non-certified. Strict policy loading
+does not by itself establish native parity, latency acceptance, or human skill.

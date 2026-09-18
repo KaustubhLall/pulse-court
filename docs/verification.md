@@ -35,7 +35,8 @@ to the original Pulse Court ruleset.
 
 - `pulse_headless` supports `--record`, `--replay`, `--verify`, and
   `--benchmark`.
-- `pulse_viewer` links the same `pulse_core` library and renders with Win32/GDI.
+- `pulse_viewer` links the same `pulse_core` library and renders gallery/setup
+  with Direct2D and gameplay with Win32/GDI.
   The viewer uses a 120 Hz fixed simulation accumulator with 60 FPS rendering,
   displays the 10 Hz policy clock, and includes edge-triggered input, focus
   pause, action trace, policy inspector placeholder, and procedural animations
@@ -50,5 +51,29 @@ to the original Pulse Court ruleset.
   court/sidebar with 120 Hz sim/60 FPS viewer timing, edge-triggered input,
   action trace, policy inspector, and procedural animations. Reset/quit controls
   and live feel testing require a human player.
-- **Deferred intentionally** — AI/training, additional team sizes, networking,
+- **Deferred intentionally** — certified AI deployment, self-play replay browser,
+  D2D gameplay migration, additional team sizes, networking,
   gamepad support, audio, polish tuning, and commercial-game comparison.
+
+## Policy and launcher acceptance
+
+Run Release and Debug builds and CTest suites. `pulse_challenge_tests`,
+`pulse_policy_tests`, and `pulse_challenge_protocol_tests` cover the additional
+policy, logging, and protocol paths. Debug is required because legacy tests
+use assertions. Execute launcher argument tests separately:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/tests/test_run_viewer_arguments.ps1
+```
+
+For loaded-policy smoke, inspect the controller mode and network decision
+counts, verify saved replay hashes, and compare recorded bot inputs against
+an independent `PolicyController`. A clean process exit is not proof that a
+network ran. Explicit scripted smoke should report no network decisions.
+Missing strict inputs and the current v2/v4 runtime mismatch must fail before
+creating session evidence.
+
+The generated dev bundle is synthetic and untrained. It can establish loading,
+inference, cadence, and replay behavior, but cannot establish A331 parity,
+trained strength, or certification. Strict v4 execution remains unverified
+until the actual v4 simulator contract is integrated.

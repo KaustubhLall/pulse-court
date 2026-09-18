@@ -1,8 +1,9 @@
 # Direct2D Migration — Handoff Plan
 
 Produced by the orchestrator Planner phase (2026-07-13) to replace `pulse_viewer`'s
-GDI/GDI+ rendering backend with Direct2D + DirectWrite + WIC. Not yet started —
-see "Status" at the bottom before picking this up.
+GDI/GDI+ rendering backend with Direct2D + DirectWrite + WIC. Tasks 1-4 are
+implemented; see "Status" at the bottom before picking this up. Task text
+below preserves the original plan and historical starting conditions.
 
 ## Goal
 
@@ -405,16 +406,23 @@ the cross-cutting gates):
 
 ## Status
 
-**Planned, not started.** This file is the Planner-phase output of the
-orchestrator skill, produced 2026-07-13 in the same session that did the GDI/GDI+
-CPU-side performance work documented in AGENTS.md's "Render performance"
-section. Execution (Executor phase — dispatching agents against these tasks)
-has not begun. Two things need explicit user sign-off before Task 1 can run:
-(1) confirmation to create the checkpoint commit described in Task 1 (nothing
-this session has been committed yet), and (2) a decision on the three stray
-PNGs in `assets/` (`1.png`, `2.png`, `1702f1fc-0462-41e4-a499-6d10ec07e4e4.png`)
-— keep, or something else.
+**Updated 2026-09-18 from code/history.** Task 1 checkpoint is `8aeee65`,
+task 2 spike is `85ad010`, task 3 gallery is `ed3fd57`, and task 4 setup is
+`293d3a4`. The three PNGs were retained in the checkpoint. The original
+uncommitted-work and not-started statements above are historical.
 
-To resume: read this file, confirm the two sign-offs above, then dispatch Task
-1 as the first Executor call, followed by Task 2 (the spike) with an Evaluator
-pass gating everything after it.
+Tasks 5-7 remain open. Current gallery/setup frames use Direct2D; gameplay
+still uses GDI/GDI+ and `kCourtInternalMaxWidth`. Existing spike measurements
+do not demonstrate the gameplay targets. The inspected notes still leave
+visual/device-loss acceptance unconfirmed; reconcile those checks before
+proceeding to the gameplay cutover.
+
+The branch now also contains separate policy/challenge work. Its headless
+target intentionally links non-rendering policy/challenge libraries, so the
+original "links only pulse_core" wording is a migration-era baseline. Preserve
+the substantive boundary: rendering changes must not modify the simulation or
+introduce viewer/graphics dependencies into headless targets.
+
+Resume with the task-5 scope and acceptance after resolving the prior visual
+gates. Keep tasks 6 and 7 separate. See `../ai-docs/project-status.md` for the
+current development checkpoint and deferred AI integration.

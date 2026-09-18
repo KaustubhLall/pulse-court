@@ -1,0 +1,203 @@
+{
+  "observed_at_utc": "2026-09-18T02:27:14.426091+00:00",
+  "scope": "synthetic untrained native-policy preview; not certification",
+  "ruleset": 2,
+  "trained_policy": false,
+  "certified": false,
+  "games_verified": 6,
+  "network_decisions": 9483,
+  "bundle_sha256": "f1a478e078f2bc409d96fd29e8074fdfc01ea4ab2c75dd8c06eddd7145ae16ac",
+  "missing_strict_input_rejected": true,
+  "strict_failure_created_evidence": false,
+  "scripted_games": 6,
+  "scripted_network_decisions": 0,
+  "replays": [
+    {
+      "game_index": 0,
+      "bot_seat": 1,
+      "ticks": 21600,
+      "network_decisions": 1801,
+      "final_state_hash": "17504860748616334555",
+      "sha256": "3dfe10ad1c3a575c06ef0e5aea7b54ae5dc180782e9eeeef60228cfa063c6b25",
+      "replay": "preview smoke/game_000.pulse",
+      "verified": true
+    },
+    {
+      "game_index": 1,
+      "bot_seat": 0,
+      "ticks": 21600,
+      "network_decisions": 1801,
+      "final_state_hash": "4559493809874828874",
+      "sha256": "b2230c343a534ea97bceef61f1d9479147ee664e9c5672cdf5675955f3fe40c1",
+      "replay": "preview smoke/game_001.pulse",
+      "verified": true
+    },
+    {
+      "game_index": 2,
+      "bot_seat": 1,
+      "ticks": 21600,
+      "network_decisions": 1801,
+      "final_state_hash": "2103176257840404849",
+      "sha256": "665ae1935a279e551b58ed620df9fd8071d7660d13dc604fb22a10ea8c87061e",
+      "replay": "preview smoke/game_002.pulse",
+      "verified": true
+    },
+    {
+      "game_index": 3,
+      "bot_seat": 0,
+      "ticks": 21600,
+      "network_decisions": 1801,
+      "final_state_hash": "542639921969402976",
+      "sha256": "92ea85ffc3b45c29dbafef7ef75252753a97c66a0ffab3972505433e0e3ec6ce",
+      "replay": "preview smoke/game_003.pulse",
+      "verified": true
+    },
+    {
+      "game_index": 4,
+      "bot_seat": 1,
+      "ticks": 5720,
+      "network_decisions": 478,
+      "final_state_hash": "17423763525808392724",
+      "sha256": "35af43287d7c8ae9f4e13d3103fc0f38d62d18b4d41d4a275534aff78c695f28",
+      "replay": "preview smoke/game_004.pulse",
+      "verified": true
+    },
+    {
+      "game_index": 5,
+      "bot_seat": 0,
+      "ticks": 21600,
+      "network_decisions": 1801,
+      "final_state_hash": "11063046621093184875",
+      "sha256": "e0ada51e88b4f71d25e0c63c4c1091eb421abae61f7a1cc7b47f1dd7f3cf9acd",
+      "replay": "preview smoke/game_005.pulse",
+      "verified": true
+    }
+  ],
+  "commands": [
+    {
+      "argv": [
+        "<build>\\pulse_dev_bundle.exe",
+        "<output>\\synthetic dev"
+      ],
+      "exit_code": 0,
+      "stdout": "wrote <output>\\synthetic dev.pzpb\nwrote <output>\\synthetic dev.pzg\nbundle sha256: f1a478e078f2bc409d96fd29e8074fdfc01ea4ab2c75dd8c06eddd7145ae16ac\ngolden cases: 8\n",
+      "stderr": "NOTE: TEST/DEV ONLY -- NON-CERTIFIED. Not usable with Policy::load() strict path.\n"
+    },
+    {
+      "argv": [
+        "<build>\\pulse_headless.exe",
+        "--challenge-smoke",
+        "--policy-bundle-preview",
+        "<output>\\synthetic dev.pzpb",
+        "--games",
+        "6",
+        "--output-dir",
+        "<output>\\preview smoke"
+      ],
+      "exit_code": 0,
+      "stdout": "Running challenge smoke mode: 6 games [policy_mode=preview] [non_certified_preview=true]\nGame 1: human 0 - bot 0 winner=-1 replay=game_000.pulse policy_mode=preview network_decisions=1801 non_certified_preview=true\nGame 2: human 0 - bot 0 winner=-1 replay=game_001.pulse policy_mode=preview network_decisions=1801 non_certified_preview=true\nGame 3: human 0 - bot 0 winner=-1 replay=game_002.pulse policy_mode=preview network_decisions=1801 non_certified_preview=true\nGame 4: human 0 - bot 0 winner=-1 replay=game_003.pulse policy_mode=preview network_decisions=1801 non_certified_preview=true\nGame 5: human 1 - bot 0 winner=0 replay=game_004.pulse policy_mode=preview network_decisions=478 non_certified_preview=true\nGame 6: human 0 - bot 0 winner=-1 replay=game_005.pulse policy_mode=preview network_decisions=1801 non_certified_preview=true\nSmoke complete. Bot wins: 0 Human wins: 1 non_certified_preview=true\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "<build>\\pulse_headless.exe",
+        "--replay",
+        "<output>\\preview smoke\\game_000.pulse"
+      ],
+      "exit_code": 0,
+      "stdout": "replay verified: 21600 ticks OK\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "<build>\\pulse_headless.exe",
+        "--replay",
+        "<output>\\preview smoke\\game_001.pulse"
+      ],
+      "exit_code": 0,
+      "stdout": "replay verified: 21600 ticks OK\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "<build>\\pulse_headless.exe",
+        "--replay",
+        "<output>\\preview smoke\\game_002.pulse"
+      ],
+      "exit_code": 0,
+      "stdout": "replay verified: 21600 ticks OK\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "<build>\\pulse_headless.exe",
+        "--replay",
+        "<output>\\preview smoke\\game_003.pulse"
+      ],
+      "exit_code": 0,
+      "stdout": "replay verified: 21600 ticks OK\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "<build>\\pulse_headless.exe",
+        "--replay",
+        "<output>\\preview smoke\\game_004.pulse"
+      ],
+      "exit_code": 0,
+      "stdout": "replay verified: 5720 ticks OK\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "<build>\\pulse_headless.exe",
+        "--replay",
+        "<output>\\preview smoke\\game_005.pulse"
+      ],
+      "exit_code": 0,
+      "stdout": "replay verified: 21600 ticks OK\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "<build>\\pulse_headless.exe",
+        "--challenge-smoke",
+        "--policy-bundle",
+        "<output>\\missing.pzpb",
+        "--policy-manifest",
+        "<output>\\missing.json",
+        "--games",
+        "6",
+        "--output-dir",
+        "<output>\\must not exist"
+      ],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": "load: manifest file not found: <output>\\missing.json\nChallenge smoke error: strict policy load failed for bundle '<output>\\missing.pzpb'\n"
+    },
+    {
+      "argv": [
+        "<build>\\pulse_headless.exe",
+        "--challenge-smoke",
+        "--scripted-policy",
+        "--games",
+        "6",
+        "--output-dir",
+        "<output>\\scripted smoke"
+      ],
+      "exit_code": 0,
+      "stdout": "Running challenge smoke mode: 6 games [policy_mode=scripted]\nGame 1: human 0 - bot 0 winner=-1 replay=game_000.pulse policy_mode=scripted network_decisions=0\nGame 2: human 0 - bot 1 winner=0 replay=game_001.pulse policy_mode=scripted network_decisions=0\nGame 3: human 0 - bot 0 winner=-1 replay=game_002.pulse policy_mode=scripted network_decisions=0\nGame 4: human 0 - bot 1 winner=0 replay=game_003.pulse policy_mode=scripted network_decisions=0\nGame 5: human 0 - bot 1 winner=1 replay=game_004.pulse policy_mode=scripted network_decisions=0\nGame 6: human 0 - bot 1 winner=0 replay=game_005.pulse policy_mode=scripted network_decisions=0\nSmoke complete. Bot wins: 4 Human wins: 0\n",
+      "stderr": ""
+    }
+  ],
+  "source_commit": "661f35dba583d51bb33a32e398b3471b29b48e12",
+  "source_branch": "codex/preview-runtime-fixes",
+  "release_suites_passed": 4,
+  "debug_suites_passed": 4,
+  "included_replay": {
+    "file": "synthetic-preview.pulse",
+    "source_game_index": 4,
+    "selection_reason": "Smallest replay for a portable demonstration; full six-game results retained. Synthetic policy lost this game.",
+    "sha256": "35af43287d7c8ae9f4e13d3103fc0f38d62d18b4d41d4a275534aff78c695f28"
+  }
+}

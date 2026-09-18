@@ -6,9 +6,9 @@ File extension: `.pulse`
 
 | Field | Size | Description |
 |-------|------|-------------|
-| magic | 8 bytes | `"PULSEREPL"` (padded to 8) |
+| magic | 8 bytes | `"PULSERPL"` (no terminator) |
 | format_version | 4 bytes | uint32, currently 1 |
-| ruleset_version | 4 bytes | uint32, currently 1 |
+| ruleset_version | 4 bytes | uint32, currently 2 in this checkout |
 | left_character | 1 byte | uint8 `Character` value |
 | right_character | 1 byte | uint8 `Character` value |
 | score_to_win | 4 bytes | int32 `MatchConfig` field |
