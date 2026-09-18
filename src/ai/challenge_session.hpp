@@ -36,6 +36,11 @@ struct GameEvidence {
     std::int8_t bot_score;
     std::string final_state_hash;
     std::string replay_path;
+    // Exact execution mode used for the bot seat in this game.
+    std::string policy_mode = "unknown";
+    // Number of fresh native-network decisions made by PolicyController.
+    // Scripted games must record zero.
+    std::uint32_t network_decision_count = 0;
     // T4: set true when this game's bot seat was driven by the non-strict
     // preview policy path (pulse::ai::PolicyController over a load_preview()
     // bundle) instead of the certified/scripted paths. Propagated into

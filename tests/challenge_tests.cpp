@@ -6,12 +6,15 @@
 #include "pulse_sim.hpp"
 #include "scripted_policy.hpp"
 #include "pulse_policy.hpp"
+#include "pulse_policy_adapter.hpp"
 #include "pulse_policy_devgen.hpp"
 
+#include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -23,6 +26,26 @@
 
 namespace pulse {
 namespace test {
+
+[[noreturn]] static void fail_added_test(const char* message) {
+    std::fprintf(stderr, "challenge test failure: %s\n", message);
+    std::abort();
+}
+
+static void require_added_test(bool condition, const char* message) {
+    if (!condition) {
+        fail_added_test(message);
+    }
+}
+
+static void require_same_frame_input(const FrameInput& lhs,
+                                     const FrameInput& rhs) {
+    require_added_test(lhs.move_x == rhs.move_x, "move_x mismatch");
+    require_added_test(lhs.move_y == rhs.move_y, "move_y mismatch");
+    require_added_test(lhs.aim_x == rhs.aim_x, "aim_x mismatch");
+    require_added_test(lhs.aim_y == rhs.aim_y, "aim_y mismatch");
+    require_added_test(lhs.buttons == rhs.buttons, "buttons mismatch");
+}
 
 void test_character_name() {
     // character_name is defined in pulse_sim.hpp
@@ -663,7 +686,8 @@ void test_smoke_game_records_replay() {
 
     GameEvidence ev;
     std::string error;
-    bool smoke_ok = run_smoke_game(policy, gs, 0, test_dir, ev, error);
+    bool smoke_ok = run_smoke_game(policy, gs, 0, test_dir, ev, error,
+                                   SmokePolicyMode::Scripted);
     assert(smoke_ok);
     (void)smoke_ok;
     assert(error.empty());
@@ -672,6 +696,8 @@ void test_smoke_game_records_replay() {
     assert(std::filesystem::exists(replay_file));
     assert(std::filesystem::file_size(replay_file) > 0);
     assert(ev.replay_path == "game_000.pulse");
+    assert(ev.policy_mode == "scripted");
+    assert(ev.network_decision_count == 0);
 
     Replay loaded;
     std::string load_error;
@@ -704,7 +730,8 @@ void test_smoke_replay_path_in_games_jsonl() {
     GameSchedule gs = session.schedule_game(0);
     GameEvidence ev;
     std::string error;
-    bool smoke_ok = run_smoke_game(policy, gs, 0, test_dir, ev, error);
+    bool smoke_ok = run_smoke_game(policy, gs, 0, test_dir, ev, error,
+                                   SmokePolicyMode::Scripted);
     assert(smoke_ok);
     (void)smoke_ok;
 
@@ -828,10 +855,12 @@ void test_smoke_determinism() {
 
     GameEvidence ev_a, ev_b;
     std::string error_a, error_b;
-    bool ok_a = run_smoke_game(policy, gs, 0, dir_a, ev_a, error_a);
+    bool ok_a = run_smoke_game(policy, gs, 0, dir_a, ev_a, error_a,
+                               SmokePolicyMode::Scripted);
     assert(ok_a);
     (void)ok_a;
-    bool ok_b = run_smoke_game(policy, gs, 0, dir_b, ev_b, error_b);
+    bool ok_b = run_smoke_game(policy, gs, 0, dir_b, ev_b, error_b,
+                               SmokePolicyMode::Scripted);
     assert(ok_b);
     (void)ok_b;
 
@@ -899,6 +928,24 @@ void test_cli_headless_preview_args() {
     ChallengeHeadlessArgs args4 = parse_challenge_headless_args(argc4, argv4);
     assert(!args4.error.empty());
 
+    // Scripted smoke is explicit and does not require a bundle or manifest.
+    const char* argv5[] = {"program", "--challenge-smoke",
+                            "--scripted-policy", "--games", "6",
+                            "--output-dir", "output"};
+    int argc5 = sizeof(argv5) / sizeof(argv5[0]);
+    ChallengeHeadlessArgs args5 = parse_challenge_headless_args(argc5, argv5);
+    assert(args5.error.empty());
+    assert(args5.scripted_policy);
+
+    // The explicit scripted mode cannot be combined with a loaded policy.
+    const char* argv6[] = {"program", "--challenge-smoke",
+                            "--scripted-policy", "--policy-bundle", "b",
+                            "--policy-manifest", "m", "--games", "6",
+                            "--output-dir", "output"};
+    int argc6 = sizeof(argv6) / sizeof(argv6[0]);
+    ChallengeHeadlessArgs args6 = parse_challenge_headless_args(argc6, argv6);
+    assert(!args6.error.empty());
+
     std::cout << "test_cli_headless_preview_args passed\n";
 }
 
@@ -936,8 +983,61 @@ void test_smoke_preview_mode() {
     assert(loaded);
     (void)loaded;
 
+    // The mode/policy contract is fail-closed in both directions.
+    {
+        GameSchedule contract_gs;
+        contract_gs.characters = {Character::Kite, Character::Vale};
+        contract_gs.human_seat = 0;
+        contract_gs.bot_seat = 1;
+        GameEvidence bad_ev;
+        std::string bad_error;
+        bool bad = run_smoke_game(policy, contract_gs, 99,
+                                  test_dir / "contract", bad_ev, bad_error,
+                                  SmokePolicyMode::Preview, nullptr);
+        require_added_test(!bad, "preview mode accepted a null policy");
+        require_added_test(bad_error.find("loaded policy") != std::string::npos,
+                           "preview null-policy diagnostic missing");
+        bad_error.clear();
+        bad = run_smoke_game(policy, contract_gs, 99, test_dir / "contract",
+                             bad_ev, bad_error, SmokePolicyMode::Scripted,
+                             &preview_policy);
+        require_added_test(!bad, "scripted mode accepted a loaded policy");
+        require_added_test(
+            bad_error.find("scripted smoke") != std::string::npos,
+            "scripted loaded-policy diagnostic missing");
+        bad_error.clear();
+        bad = run_smoke_game(policy, contract_gs, 99, test_dir / "contract",
+                             bad_ev, bad_error, SmokePolicyMode::Strict,
+                             &preview_policy);
+        require_added_test(!bad, "strict mode accepted a preview policy");
+        require_added_test(
+            bad_error.find("strict provenance") != std::string::npos,
+            "strict preview-policy diagnostic missing");
+
+        // Reusing an evidence object must reset the per-game network count.
+        std::filesystem::path reused_dir = test_dir / "reused";
+        std::filesystem::create_directories(reused_dir);
+        GameEvidence reused_ev;
+        bool reused_ok = run_smoke_game(
+            policy, contract_gs, 0, reused_dir, reused_ev, bad_error,
+            SmokePolicyMode::Preview, &preview_policy);
+        require_added_test(reused_ok, "first reused-evidence smoke failed");
+        const std::uint32_t first_reused_count = reused_ev.network_decision_count;
+        reused_ok = run_smoke_game(policy, contract_gs, 0, reused_dir,
+                                   reused_ev, bad_error,
+                                   SmokePolicyMode::Preview, &preview_policy);
+        require_added_test(reused_ok, "second reused-evidence smoke failed");
+        require_added_test(
+            reused_ev.network_decision_count == first_reused_count,
+            "reused evidence accumulated network decisions");
+    }
+
     ChallengeSession session(policy, test_dir / "logs", 20);
     assert(session.valid());
+
+    std::filesystem::path preview_replay_path;
+    GameSchedule first_preview_schedule{};
+    std::uint32_t first_preview_decision_count = 0;
 
     for (std::int32_t game_idx = 0; game_idx < 2; ++game_idx) {
         GameSchedule gs = session.schedule_game(game_idx);
@@ -948,16 +1048,28 @@ void test_smoke_preview_mode() {
         GameEvidence ev;
         std::string error;
         bool ok = run_smoke_game(policy, gs, game_idx, test_dir / "logs", ev,
-                                 error, &preview_policy);
+                                 error, SmokePolicyMode::Preview,
+                                 &preview_policy);
         assert(ok);
         (void)ok;
         assert(error.empty());
-        assert(ev.non_certified_preview);
+        require_added_test(ev.non_certified_preview,
+                           "preview evidence missing non-certified marker");
+        require_added_test(ev.policy_mode == "preview",
+                           "preview evidence mode missing");
+        require_added_test(ev.network_decision_count > 0,
+                           "preview evidence has no network decisions");
 
         std::filesystem::path replay_file =
             (test_dir / "logs") / ev.replay_path;
         assert(std::filesystem::exists(replay_file));
         assert(std::filesystem::file_size(replay_file) > 0);
+
+        if (game_idx == 0) {
+            preview_replay_path = replay_file;
+            first_preview_schedule = gs;
+            first_preview_decision_count = ev.network_decision_count;
+        }
 
         session.record_game_result(ev);
     }
@@ -976,6 +1088,81 @@ void test_smoke_preview_mode() {
     }
     in.close();
     assert(tagged_lines == 2);
+
+    // Replay inputs from the loaded bundle must be exactly reproducible by a
+    // fresh, independently stepped PolicyController, including cadence and
+    // every FrameInput field.
+    Replay preview_replay;
+    std::string replay_error;
+    bool replay_loaded = load_replay(preview_replay_path.string(),
+                                     preview_replay, replay_error);
+    require_added_test(replay_loaded, "preview replay failed to load");
+    Simulation independent_sim(preview_replay.characters,
+                               preview_replay.config);
+    ai::PolicyController independent_controller(preview_policy);
+    independent_controller.reset();
+    std::uint32_t independent_decisions = 0;
+    for (const RecordedTick& recorded : preview_replay.ticks) {
+        const std::uint32_t tick = independent_sim.state().tick;
+        const FrameInput expected_human =
+            scripted_input(tick, first_preview_schedule.human_seat,
+                           first_preview_schedule.characters[
+                               first_preview_schedule.human_seat]);
+        require_same_frame_input(
+            recorded.inputs[first_preview_schedule.human_seat], expected_human);
+        const ai::ControllerOutput output = independent_controller.act(
+            independent_sim.state(),
+            static_cast<std::size_t>(first_preview_schedule.bot_seat));
+        require_same_frame_input(
+            recorded.inputs[first_preview_schedule.bot_seat], output.input);
+        if (output.decision) {
+            ++independent_decisions;
+        }
+        (void)independent_sim.step(recorded.inputs);
+        require_added_test(recorded.expected_hash == independent_sim.state_hash(),
+                           "independent replay state hash mismatch");
+    }
+    require_added_test(independent_decisions > 0,
+                       "independent controller made no decisions");
+    require_added_test(independent_decisions == first_preview_decision_count,
+                       "network decision count mismatch");
+
+    // The same schedule through the explicit scripted path must produce a
+    // different bot input stream, preventing a process-success-only test from
+    // accidentally bypassing native policy inference.
+    std::filesystem::path scripted_dir = test_dir / "scripted";
+    std::filesystem::create_directories(scripted_dir);
+    GameEvidence scripted_ev;
+    std::string scripted_error;
+    bool scripted_ok = run_smoke_game(
+        policy, first_preview_schedule, 0, scripted_dir, scripted_ev,
+        scripted_error, SmokePolicyMode::Scripted, nullptr);
+    require_added_test(scripted_ok, "scripted comparison smoke failed");
+    Replay scripted_replay;
+    bool scripted_loaded = load_replay(
+        (scripted_dir / scripted_ev.replay_path).string(), scripted_replay,
+        scripted_error);
+    require_added_test(scripted_loaded, "scripted comparison replay failed");
+    bool bot_stream_differs = false;
+    const std::size_t common_ticks = std::min(preview_replay.ticks.size(),
+                                              scripted_replay.ticks.size());
+    require_added_test(common_ticks > 0, "no common replay ticks to compare");
+    for (std::size_t i = 0; i < common_ticks; ++i) {
+        const FrameInput& network_input =
+            preview_replay.ticks[i].inputs[first_preview_schedule.bot_seat];
+        const FrameInput& scripted_input_value =
+            scripted_replay.ticks[i].inputs[first_preview_schedule.bot_seat];
+        if (network_input.move_x != scripted_input_value.move_x ||
+            network_input.move_y != scripted_input_value.move_y ||
+            network_input.aim_x != scripted_input_value.aim_x ||
+            network_input.aim_y != scripted_input_value.aim_y ||
+            network_input.buttons != scripted_input_value.buttons) {
+            bot_stream_differs = true;
+            break;
+        }
+    }
+    require_added_test(bot_stream_differs,
+                       "preview and scripted bot streams did not differ");
 
     std::filesystem::remove_all(test_dir);
     std::cout << "test_smoke_preview_mode passed\n";

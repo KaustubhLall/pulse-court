@@ -56,15 +56,19 @@ int main(int argc, char** argv) {
         policy.manifest_sha = "synthetic_manifest_sha";
         policy.certification_sha = "synthetic_cert_sha";
 
-        const bool preview_mode = !smoke_args.preview_bundle_path.empty();
+        const SmokePolicyMode mode = smoke_args.scripted_policy
+                                         ? SmokePolicyMode::Scripted
+                                         : (!smoke_args.preview_bundle_path.empty()
+                                                ? SmokePolicyMode::Preview
+                                                : SmokePolicyMode::Strict);
 
         // T4: non-certified preview mode. Loaded via the non-strict
         // load_preview() path -- no manifest, no provenance, no
         // certification gate. The loaded Policy drives the bot seat via
         // pulse::ai::PolicyController inside run_smoke_game().
-        Policy preview_policy;
-        if (preview_mode) {
-            if (!preview_policy.load_preview(smoke_args.preview_bundle_path)) {
+        Policy loaded_policy;
+        if (mode == SmokePolicyMode::Preview) {
+            if (!loaded_policy.load_preview(smoke_args.preview_bundle_path)) {
                 std::cerr << "Challenge smoke preview error: failed to load "
                              "preview bundle '"
                           << smoke_args.preview_bundle_path << "'\n";
@@ -72,26 +76,25 @@ int main(int argc, char** argv) {
             }
             policy.checkpoint_id = "non_certified_preview";
             policy.model_version = "preview";
-            policy.bundle_sha = preview_policy.bundle_sha256();
+            policy.bundle_sha = loaded_policy.bundle_sha256();
             policy.manifest_sha = "";
             policy.certification_sha = "";
-        } else if (std::filesystem::exists(smoke_args.bundle_path) &&
-                   std::filesystem::is_regular_file(smoke_args.bundle_path)) {
-            // T4: current/synthetic form (dummy bundle_path strings, as used
-            // by every existing test and the default synthetic policy above)
-            // is unaffected -- this strict-load attempt only triggers when
-            // --policy-bundle actually names a file on disk. The strict
-            // loader fails closed and prints its own diagnostic to stderr.
-            Policy strict_policy;
-            if (!strict_policy.load(smoke_args.bundle_path,
+        } else if (mode == SmokePolicyMode::Strict) {
+            // Strict mode is explicit and always attempts the requested load.
+            // A missing or incompatible bundle must fail closed; it must not
+            // silently become a scripted smoke run.
+            if (!loaded_policy.load(smoke_args.bundle_path,
                                     smoke_args.manifest_path)) {
                 std::cerr << "Challenge smoke error: strict policy load "
                              "failed for bundle '"
                           << smoke_args.bundle_path << "'\n";
                 return 1;
             }
-            policy.bundle_sha = strict_policy.bundle_sha256();
-            policy.checkpoint_id = strict_policy.checkpoint_sha256();
+            policy.bundle_sha = loaded_policy.bundle_sha256();
+            policy.checkpoint_id = loaded_policy.checkpoint_sha256();
+            policy.manifest_sha = loaded_policy.provenance().manifest_sha256;
+            policy.certification_sha =
+                loaded_policy.provenance().certification_sha256;
         }
 
         ChallengeSession session(policy, smoke_args.output_dir,
@@ -104,7 +107,13 @@ int main(int argc, char** argv) {
 
         std::cout << "Running challenge smoke mode: " << smoke_args.games
                   << " games";
-        if (preview_mode) {
+        std::cout << " [policy_mode="
+                  << (mode == SmokePolicyMode::Scripted
+                          ? "scripted"
+                          : (mode == SmokePolicyMode::Preview ? "preview"
+                                                              : "strict"))
+                  << "]";
+        if (mode == SmokePolicyMode::Preview) {
             std::cout << " [non_certified_preview=true]";
         }
         std::cout << "\n";
@@ -118,9 +127,9 @@ int main(int argc, char** argv) {
             GameEvidence ev;
             std::string error;
             const Policy* controller_policy =
-                preview_mode ? &preview_policy : nullptr;
+                mode == SmokePolicyMode::Scripted ? nullptr : &loaded_policy;
             if (!run_smoke_game(policy, gs, game_idx, smoke_args.output_dir,
-                                ev, error, controller_policy)) {
+                                ev, error, mode, controller_policy)) {
                 std::cerr << "Replay record failed: " << error << "\n";
                 return 1;
             }
@@ -132,6 +141,9 @@ int main(int argc, char** argv) {
                       << static_cast<int>(ev.bot_score)
                       << " winner=" << static_cast<int>(ev.winner)
                       << " replay=" << ev.replay_path;
+            std::cout << " policy_mode=" << ev.policy_mode
+                      << " network_decisions="
+                      << ev.network_decision_count;
             if (ev.non_certified_preview) {
                 std::cout << " non_certified_preview=true";
             }
@@ -142,7 +154,7 @@ int main(int argc, char** argv) {
         SessionSummary s = session.summary();
         std::cout << "Smoke complete. Bot wins: " << s.bot_wins
                   << " Human wins: " << s.human_wins;
-        if (preview_mode) {
+        if (mode == SmokePolicyMode::Preview) {
             std::cout << " non_certified_preview=true";
         }
         std::cout << "\n";

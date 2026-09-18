@@ -496,6 +496,25 @@ void test_manifest_validation_happy_path() {
     CHECK(policy.validate_manifest_internal(kValidBundleSha, error_msg));
 }
 
+void test_runtime_ruleset_gate_is_separate_from_schema_validation() {
+    // The manifest schema is a v4 artifact and remains independently
+    // testable. Runtime validation must additionally reject it when this
+    // simulator was compiled for another ruleset.
+    pulse::Policy policy;
+    std::string valid_manifest = build_valid_manifest();
+    std::string error_msg;
+    CHECK(policy.parse_json_internal(valid_manifest, error_msg));
+    CHECK(policy.validate_manifest_internal(kValidBundleSha, error_msg));
+
+    const bool runtime_ok = policy.validate_manifest(kValidBundleSha, error_msg);
+    if (pulse::kRulesetVersion != 4) {
+        CHECK(!runtime_ok);
+        CHECK(error_msg.find("compiled ruleset_version") != std::string::npos);
+    } else {
+        CHECK(runtime_ok);
+    }
+}
+
 void test_manifest_validation_wrong_bundle_sha_rejected() {
     // Test manifest validation with wrong bundle SHA (mismatches the arg).
     pulse::Policy policy;
@@ -1008,6 +1027,7 @@ int main() {
     test_json_parser_malformed_escape_rejected();
     test_json_parser_excessive_depth_rejected();
     test_manifest_validation_happy_path();
+    test_runtime_ruleset_gate_is_separate_from_schema_validation();
     test_manifest_validation_wrong_bundle_sha_rejected();
     test_manifest_validation_wrong_hash_format_rejected();
     // PolicyController 12-tick cadence tests.

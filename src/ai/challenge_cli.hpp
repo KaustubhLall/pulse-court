@@ -24,6 +24,9 @@ struct ChallengeViewerArgs {
 
 struct ChallengeHeadlessArgs {
     bool smoke = false;
+    // Explicit deterministic scripted smoke mode. This must never be inferred
+    // from a missing strict bundle path.
+    bool scripted_policy = false;
     std::string bundle_path;
     std::string manifest_path;
     // T4: non-certified preview bundle path, set by --policy-bundle-preview.

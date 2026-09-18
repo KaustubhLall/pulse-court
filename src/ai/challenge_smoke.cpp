@@ -54,7 +54,27 @@ FrameInput scripted_input(std::uint32_t tick, std::size_t player,
 bool run_smoke_game(const PolicyMetadata& policy, const GameSchedule& gs,
                     std::int32_t game_index,
                     const std::filesystem::path& output_dir, GameEvidence& out,
-                    std::string& error, const Policy* preview_policy) {
+                    std::string& error, SmokePolicyMode mode,
+                    const Policy* loaded_policy) {
+    out = GameEvidence{};
+    error.clear();
+    if (mode == SmokePolicyMode::Scripted) {
+        if (loaded_policy != nullptr) {
+            error = "scripted smoke cannot receive a loaded policy";
+            return false;
+        }
+    } else {
+        if (loaded_policy == nullptr || !loaded_policy->is_loaded()) {
+            error = "network smoke requires a loaded policy";
+            return false;
+        }
+        if (mode == SmokePolicyMode::Strict &&
+            !loaded_policy->provenance().is_populated()) {
+            error = "strict smoke requires a policy loaded with strict provenance";
+            return false;
+        }
+    }
+
     std::int32_t human_seat = gs.human_seat;
     std::int32_t bot_seat = gs.bot_seat;
 
@@ -62,17 +82,14 @@ bool run_smoke_game(const PolicyMetadata& policy, const GameSchedule& gs,
     config.score_to_win = 1;  // explicit score-to-one for smoke
     Simulation sim(gs.characters, config);
 
-    // Scripted mode (default): historical ScriptedPolicyController path, no
-    // network involved. Preview mode: real 12-tick-cadence network inference
-    // via pulse::ai::PolicyController wrapping *preview_policy.
     ScriptedPolicyController controller(policy, bot_seat, gs.characters[bot_seat],
                                 gs.characters[human_seat]);
-    controller.reset(sim.state());
-
-    std::unique_ptr<ai::PolicyController> preview_controller;
-    if (preview_policy != nullptr) {
-        preview_controller = std::make_unique<ai::PolicyController>(*preview_policy);
-        preview_controller->reset();
+    std::unique_ptr<ai::PolicyController> network_controller;
+    if (mode == SmokePolicyMode::Scripted) {
+        controller.reset(sim.state());
+    } else {
+        network_controller = std::make_unique<ai::PolicyController>(*loaded_policy);
+        network_controller->reset();
     }
 
     Replay replay;
@@ -85,10 +102,13 @@ bool run_smoke_game(const PolicyMetadata& policy, const GameSchedule& gs,
         std::array<FrameInput, 2> in = {};
         in[human_seat] = scripted_input(tick, human_seat,
                                         gs.characters[human_seat]);
-        if (preview_controller) {
-            in[bot_seat] = preview_controller
-                               ->act(sim.state(), static_cast<std::size_t>(bot_seat))
-                               .input;
+        if (network_controller) {
+            const ai::ControllerOutput output = network_controller->act(
+                sim.state(), static_cast<std::size_t>(bot_seat));
+            in[bot_seat] = output.input;
+            if (output.decision) {
+                ++out.network_decision_count;
+            }
         } else {
             in[bot_seat] = controller.decide(sim.state(), tick, bot_seat);
         }
@@ -130,7 +150,11 @@ bool run_smoke_game(const PolicyMetadata& policy, const GameSchedule& gs,
     out.bot_score = static_cast<std::int8_t>(state.score[bot_seat]);
     out.final_state_hash = std::to_string(sim.state_hash());
     out.replay_path = filename;
-    out.non_certified_preview = (preview_policy != nullptr);
+    out.policy_mode = mode == SmokePolicyMode::Scripted
+                          ? "scripted"
+                          : (mode == SmokePolicyMode::Preview ? "preview"
+                                                              : "strict");
+    out.non_certified_preview = (mode == SmokePolicyMode::Preview);
 
     return true;
 }

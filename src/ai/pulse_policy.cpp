@@ -1101,7 +1101,20 @@ bool Policy::parse_json_internal(const std::string& json_str, std::string& error
 
 bool Policy::validate_manifest(const std::string& bundle_sha,
                               std::string& error_msg) noexcept {
-    return validate_manifest_internal(bundle_sha, error_msg);
+    // Keep schema validation independently testable under older simulator
+    // builds, but never allow strict runtime loading against the v4 bundle
+    // contract unless this binary was compiled with the same ruleset.
+    if (!validate_manifest_internal(bundle_sha, error_msg)) {
+        return false;
+    }
+    if (kRulesetVersion != 4) {
+        error_msg = "compiled ruleset_version " +
+                    std::to_string(kRulesetVersion) +
+                    " is incompatible with supported policy bundle "
+                    "ruleset_version 4";
+        return false;
+    }
+    return true;
 }
 
 bool Policy::validate_manifest_internal(const std::string& bundle_sha,

@@ -192,6 +192,12 @@ ChallengeHeadlessArgs parse_challenge_headless_args(
                 return args;
             }
             args.smoke = true;
+        } else if (arg == "--scripted-policy") {
+            if (args.scripted_policy) {
+                args.error = "duplicate --scripted-policy";
+                return args;
+            }
+            args.scripted_policy = true;
         } else if (arg == "--policy-bundle") {
             if (i + 1 >= argc) {
                 args.error = "missing value for --policy-bundle";
@@ -265,14 +271,22 @@ ChallengeHeadlessArgs parse_challenge_headless_args(
     }
 
     if (args.smoke) {
+        if (args.scripted_policy && (bundle_set || manifest_set ||
+                                     preview_bundle_set)) {
+            args.error =
+                "--scripted-policy is mutually exclusive with "
+                "--policy-bundle/--policy-manifest/--policy-bundle-preview";
+            return args;
+        }
         if (bundle_set && preview_bundle_set) {
             args.error =
                 "--policy-bundle and --policy-bundle-preview are mutually "
                 "exclusive";
             return args;
         }
-        if (!bundle_set && !preview_bundle_set) {
-            args.error = "missing --policy-bundle or --policy-bundle-preview";
+        if (!bundle_set && !preview_bundle_set && !args.scripted_policy) {
+            args.error = "missing --policy-bundle, --policy-bundle-preview, "
+                         "or --scripted-policy";
             return args;
         }
         if (bundle_set && !manifest_set) {

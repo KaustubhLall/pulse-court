@@ -129,6 +129,8 @@ void ChallengeSession::append_game_line(const GameEvidence& evidence) {
         << ",\"bot_score\":" << static_cast<int>(evidence.bot_score)
         << ",\"final_state_hash\":\"" << json_escape(evidence.final_state_hash) << "\""
         << ",\"replay_path\":\"" << json_escape(evidence.replay_path) << "\""
+        << ",\"policy_mode\":\"" << json_escape(evidence.policy_mode) << "\""
+        << ",\"network_decision_count\":" << evidence.network_decision_count
         << ",\"non_certified_preview\":" << (evidence.non_certified_preview ? "true" : "false")
         << "}\n";
     file << oss.str();
