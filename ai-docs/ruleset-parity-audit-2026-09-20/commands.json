@@ -1,0 +1,281 @@
+[
+  {
+    "name": "configure",
+    "argv": [
+      "C:\\Program Files\\CMake\\bin\\cmake.EXE",
+      "-S",
+      "<root>\\scripts\\audit_ruleset_contracts",
+      "-B",
+      "<output>\\build",
+      "-G",
+      "Visual Studio 18 2026",
+      "-A",
+      "x64",
+      "-DPULSE_ROOT=<root>",
+      "-DPULSE_REFERENCE=<reference>"
+    ],
+    "exit_code": 0,
+    "stdout": "-- Selecting Windows SDK version 10.0.26100.0 to target Windows 10.0.26200.\n-- The CXX compiler identification is MSVC 19.50.35725.0\n-- Detecting CXX compiler ABI info\n-- Detecting CXX compiler ABI info - done\n-- Check for working CXX compiler: C:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/cl.exe - skipped\n-- Detecting CXX compile features\n-- Detecting CXX compile features - done\n-- Configuring done (2.3s)\n-- Generating done (0.1s)\n-- Build files have been written to: <output>/build\n",
+    "stderr": ""
+  },
+  {
+    "name": "Release-build",
+    "argv": [
+      "C:\\Program Files\\CMake\\bin\\cmake.EXE",
+      "--build",
+      "<output>\\build",
+      "--config",
+      "Release"
+    ],
+    "exit_code": 0,
+    "stdout": "MSBuild version 18.3.0-release-26070-10+3972042b7 for .NET Framework\n\n  1>Checking Build System\n  Building Custom Rule <root>/scripts/audit_ruleset_contracts/CMakeLists.txt\n  probe.cpp\n  fixed_math.cpp\n  pulse_sim.cpp\n  pulse_replay.cpp\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244: 'initializing': conversion from '_Ty' to '_Ty1', possible loss of data [<output>\\build\\audit_v2.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:         with [<output>\\build\\audit_v2.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:         [ [<output>\\build\\audit_v2.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:             _Ty=int [<output>\\build\\audit_v2.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:         ] [<output>\\build\\audit_v2.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:         and [<output>\\build\\audit_v2.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:         [ [<output>\\build\\audit_v2.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:             _Ty1=signed char [<output>\\build\\audit_v2.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:         ] [<output>\\build\\audit_v2.vcxproj]\n  (compiling source file '../../../src/core/pulse_sim.cpp')\n      C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16):\n      the template instantiation context (the oldest one first) is\n          <root>\\src\\core\\pulse_sim.cpp(636,21):\n          see reference to function template instantiation 'std::pair<signed char,signed char>::pair<int,int,0>(_Other1 &&,_Other2 &&) noexcept' being compiled\n          with\n          [\n              _Other1=int,\n              _Other2=int\n          ]\n              <root>\\src\\core\\pulse_sim.cpp(636,21):\n              see the first reference to 'std::pair<signed char,signed char>::pair' in 'pulse::Simulation::decode_action::<lambda_1>::operator ()'\n  \nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244: 'initializing': conversion from '_Ty' to '_Ty2', possible loss of data [<output>\\build\\audit_v2.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:         with [<output>\\build\\audit_v2.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:         [ [<output>\\build\\audit_v2.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:             _Ty=int [<output>\\build\\audit_v2.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:         ] [<output>\\build\\audit_v2.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:         and [<output>\\build\\audit_v2.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:         [ [<output>\\build\\audit_v2.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:             _Ty2=signed char [<output>\\build\\audit_v2.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:         ] [<output>\\build\\audit_v2.vcxproj]\n  (compiling source file '../../../src/core/pulse_sim.cpp')\n  \n<root>\\src\\core\\pulse_replay.cpp(212,13): warning C4834: discarding return value of function with [[nodiscard]] attribute [<output>\\build\\audit_v2.vcxproj]\n  pulse_ai.cpp\n  Generating Code...\n  audit_v2.vcxproj -> <output>\\build\\Release\\audit_v2.exe\n  Building Custom Rule <root>/scripts/audit_ruleset_contracts/CMakeLists.txt\n  probe.cpp\n  fixed_math.cpp\n  pulse_sim.cpp\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244: 'initializing': conversion from '_Ty' to '_Ty1', possible loss of data [<output>\\build\\audit_v4.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:         with [<output>\\build\\audit_v4.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:         [ [<output>\\build\\audit_v4.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:             _Ty=int [<output>\\build\\audit_v4.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:         ] [<output>\\build\\audit_v4.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:         and [<output>\\build\\audit_v4.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:         [ [<output>\\build\\audit_v4.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:             _Ty1=signed char [<output>\\build\\audit_v4.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:         ] [<output>\\build\\audit_v4.vcxproj]\n  (compiling source file '../../pulse-zero-work/src/core/pulse_sim.cpp')\n      C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16):\n      the template instantiation context (the oldest one first) is\n          <reference>\\src\\core\\pulse_sim.cpp(651,21):\n          see reference to function template instantiation 'std::pair<signed char,signed char>::pair<int,int,0>(_Other1 &&,_Other2 &&) noexcept' being compiled\n          with\n          [\n              _Other1=int,\n              _Other2=int\n          ]\n              <reference>\\src\\core\\pulse_sim.cpp(651,21):\n              see the first reference to 'std::pair<signed char,signed char>::pair' in 'pulse::Simulation::decode_action::<lambda_1>::operator ()'\n  \nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244: 'initializing': conversion from '_Ty' to '_Ty2', possible loss of data [<output>\\build\\audit_v4.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:         with [<output>\\build\\audit_v4.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:         [ [<output>\\build\\audit_v4.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:             _Ty=int [<output>\\build\\audit_v4.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:         ] [<output>\\build\\audit_v4.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:         and [<output>\\build\\audit_v4.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:         [ [<output>\\build\\audit_v4.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:             _Ty2=signed char [<output>\\build\\audit_v4.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:         ] [<output>\\build\\audit_v4.vcxproj]\n  (compiling source file '../../pulse-zero-work/src/core/pulse_sim.cpp')\n  \n  pulse_replay.cpp\n<reference>\\src\\core\\pulse_replay.cpp(174,13): warning C4834: discarding return value of function with [[nodiscard]] attribute [<output>\\build\\audit_v4.vcxproj]\n  pulse_ai.cpp\n  Generating Code...\n  audit_v4.vcxproj -> <output>\\build\\Release\\audit_v4.exe\n  Building Custom Rule <root>/scripts/audit_ruleset_contracts/CMakeLists.txt\n",
+    "stderr": ""
+  },
+  {
+    "name": "Release-v2-probe",
+    "argv": [
+      "<output>\\build\\Release\\audit_v2.exe"
+    ],
+    "exit_code": 0,
+    "stderr": "",
+    "stdout_artifact": "v2-probe.jsonl",
+    "stdout_utf8_sha256": "182815c04dbd79c84a9c531e9897b13954bb795b966c99a2a47ccc042aaa131e"
+  },
+  {
+    "name": "Release-v2-repeat",
+    "argv": [
+      "<output>\\build\\Release\\audit_v2.exe"
+    ],
+    "exit_code": 0,
+    "stderr": "",
+    "stdout_artifact": "v2-probe.jsonl",
+    "stdout_utf8_sha256": "182815c04dbd79c84a9c531e9897b13954bb795b966c99a2a47ccc042aaa131e"
+  },
+  {
+    "name": "Release-v4-probe",
+    "argv": [
+      "<output>\\build\\Release\\audit_v4.exe"
+    ],
+    "exit_code": 0,
+    "stderr": "",
+    "stdout_artifact": "v4-probe.jsonl",
+    "stdout_utf8_sha256": "bb79494119c108a623cd812624042564033cd9991aa01afea3436c58097ca6de"
+  },
+  {
+    "name": "Release-v4-repeat",
+    "argv": [
+      "<output>\\build\\Release\\audit_v4.exe"
+    ],
+    "exit_code": 0,
+    "stderr": "",
+    "stdout_artifact": "v4-probe.jsonl",
+    "stdout_utf8_sha256": "bb79494119c108a623cd812624042564033cd9991aa01afea3436c58097ca6de"
+  },
+  {
+    "name": "v2-save-replay",
+    "argv": [
+      "<output>\\build\\Release\\audit_v2.exe",
+      "--write-replay",
+      "<output>\\v2.pulse"
+    ],
+    "exit_code": 0,
+    "stdout": "{\"saved_ticks\":1,\"ruleset\":2}\n",
+    "stderr": ""
+  },
+  {
+    "name": "v4-save-replay",
+    "argv": [
+      "<output>\\build\\Release\\audit_v4.exe",
+      "--write-replay",
+      "<output>\\v4.pulse"
+    ],
+    "exit_code": 0,
+    "stdout": "{\"saved_ticks\":1,\"ruleset\":4}\n",
+    "stderr": ""
+  },
+  {
+    "name": "Release-v2-read-v2",
+    "argv": [
+      "<output>\\build\\Release\\audit_v2.exe",
+      "--read-replay",
+      "<output>\\v2.pulse"
+    ],
+    "exit_code": 0,
+    "stdout": "{\"loaded\":true,\"verified\":true,\"ticks\":1,\"error\":\"\"}\n",
+    "stderr": ""
+  },
+  {
+    "name": "Release-v2-read-v4",
+    "argv": [
+      "<output>\\build\\Release\\audit_v2.exe",
+      "--read-replay",
+      "<output>\\v4.pulse"
+    ],
+    "exit_code": 0,
+    "stdout": "{\"loaded\":false,\"verified\":false,\"ticks\":0,\"error\":\"incompatible ruleset version\"}\n",
+    "stderr": ""
+  },
+  {
+    "name": "Release-v2-read-historical_v2",
+    "argv": [
+      "<output>\\build\\Release\\audit_v2.exe",
+      "--read-replay",
+      "<root>\\ai-docs\\portfolio-handoff-2026-09-18\\synthetic-preview.pulse"
+    ],
+    "exit_code": 0,
+    "stdout": "{\"loaded\":true,\"verified\":true,\"ticks\":5720,\"error\":\"\"}\n",
+    "stderr": ""
+  },
+  {
+    "name": "Release-v4-read-v2",
+    "argv": [
+      "<output>\\build\\Release\\audit_v4.exe",
+      "--read-replay",
+      "<output>\\v2.pulse"
+    ],
+    "exit_code": 0,
+    "stdout": "{\"loaded\":false,\"verified\":false,\"ticks\":0,\"error\":\"incompatible ruleset version\"}\n",
+    "stderr": ""
+  },
+  {
+    "name": "Release-v4-read-v4",
+    "argv": [
+      "<output>\\build\\Release\\audit_v4.exe",
+      "--read-replay",
+      "<output>\\v4.pulse"
+    ],
+    "exit_code": 0,
+    "stdout": "{\"loaded\":true,\"verified\":true,\"ticks\":1,\"error\":\"\"}\n",
+    "stderr": ""
+  },
+  {
+    "name": "Release-v4-read-historical_v2",
+    "argv": [
+      "<output>\\build\\Release\\audit_v4.exe",
+      "--read-replay",
+      "<root>\\ai-docs\\portfolio-handoff-2026-09-18\\synthetic-preview.pulse"
+    ],
+    "exit_code": 0,
+    "stdout": "{\"loaded\":false,\"verified\":false,\"ticks\":0,\"error\":\"incompatible ruleset version\"}\n",
+    "stderr": ""
+  },
+  {
+    "name": "Debug-build",
+    "argv": [
+      "C:\\Program Files\\CMake\\bin\\cmake.EXE",
+      "--build",
+      "<output>\\build",
+      "--config",
+      "Debug"
+    ],
+    "exit_code": 0,
+    "stdout": "MSBuild version 18.3.0-release-26070-10+3972042b7 for .NET Framework\n\n  1>Checking Build System\n  Building Custom Rule <root>/scripts/audit_ruleset_contracts/CMakeLists.txt\n  probe.cpp\n  fixed_math.cpp\n  pulse_sim.cpp\n  pulse_replay.cpp\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244: 'initializing': conversion from '_Ty' to '_Ty1', possible loss of data [<output>\\build\\audit_v2.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:         with [<output>\\build\\audit_v2.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:         [ [<output>\\build\\audit_v2.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:             _Ty=int [<output>\\build\\audit_v2.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:         ] [<output>\\build\\audit_v2.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:         and [<output>\\build\\audit_v2.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:         [ [<output>\\build\\audit_v2.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:             _Ty1=signed char [<output>\\build\\audit_v2.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:         ] [<output>\\build\\audit_v2.vcxproj]\n  (compiling source file '../../../src/core/pulse_sim.cpp')\n      C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16):\n      the template instantiation context (the oldest one first) is\n          <root>\\src\\core\\pulse_sim.cpp(636,21):\n          see reference to function template instantiation 'std::pair<signed char,signed char>::pair<int,int,0>(_Other1 &&,_Other2 &&) noexcept' being compiled\n          with\n          [\n              _Other1=int,\n              _Other2=int\n          ]\n              <root>\\src\\core\\pulse_sim.cpp(636,21):\n              see the first reference to 'std::pair<signed char,signed char>::pair' in 'pulse::Simulation::decode_action::<lambda_1>::operator ()'\n  \nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244: 'initializing': conversion from '_Ty' to '_Ty2', possible loss of data [<output>\\build\\audit_v2.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:         with [<output>\\build\\audit_v2.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:         [ [<output>\\build\\audit_v2.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:             _Ty=int [<output>\\build\\audit_v2.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:         ] [<output>\\build\\audit_v2.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:         and [<output>\\build\\audit_v2.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:         [ [<output>\\build\\audit_v2.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:             _Ty2=signed char [<output>\\build\\audit_v2.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:         ] [<output>\\build\\audit_v2.vcxproj]\n  (compiling source file '../../../src/core/pulse_sim.cpp')\n  \n<root>\\src\\core\\pulse_replay.cpp(212,13): warning C4834: discarding return value of function with [[nodiscard]] attribute [<output>\\build\\audit_v2.vcxproj]\n  pulse_ai.cpp\n  Generating Code...\n  audit_v2.vcxproj -> <output>\\build\\Debug\\audit_v2.exe\n  Building Custom Rule <root>/scripts/audit_ruleset_contracts/CMakeLists.txt\n  probe.cpp\n  fixed_math.cpp\n  pulse_sim.cpp\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244: 'initializing': conversion from '_Ty' to '_Ty1', possible loss of data [<output>\\build\\audit_v4.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:         with [<output>\\build\\audit_v4.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:         [ [<output>\\build\\audit_v4.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:             _Ty=int [<output>\\build\\audit_v4.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:         ] [<output>\\build\\audit_v4.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:         and [<output>\\build\\audit_v4.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:         [ [<output>\\build\\audit_v4.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:             _Ty1=signed char [<output>\\build\\audit_v4.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:         ] [<output>\\build\\audit_v4.vcxproj]\n  (compiling source file '../../pulse-zero-work/src/core/pulse_sim.cpp')\n      C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16):\n      the template instantiation context (the oldest one first) is\n          <reference>\\src\\core\\pulse_sim.cpp(651,21):\n          see reference to function template instantiation 'std::pair<signed char,signed char>::pair<int,int,0>(_Other1 &&,_Other2 &&) noexcept' being compiled\n          with\n          [\n              _Other1=int,\n              _Other2=int\n          ]\n              <reference>\\src\\core\\pulse_sim.cpp(651,21):\n              see the first reference to 'std::pair<signed char,signed char>::pair' in 'pulse::Simulation::decode_action::<lambda_1>::operator ()'\n  \nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244: 'initializing': conversion from '_Ty' to '_Ty2', possible loss of data [<output>\\build\\audit_v4.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:         with [<output>\\build\\audit_v4.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:         [ [<output>\\build\\audit_v4.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:             _Ty=int [<output>\\build\\audit_v4.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:         ] [<output>\\build\\audit_v4.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:         and [<output>\\build\\audit_v4.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:         [ [<output>\\build\\audit_v4.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:             _Ty2=signed char [<output>\\build\\audit_v4.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:         ] [<output>\\build\\audit_v4.vcxproj]\n  (compiling source file '../../pulse-zero-work/src/core/pulse_sim.cpp')\n  \n  pulse_replay.cpp\n<reference>\\src\\core\\pulse_replay.cpp(174,13): warning C4834: discarding return value of function with [[nodiscard]] attribute [<output>\\build\\audit_v4.vcxproj]\n  pulse_ai.cpp\n  Generating Code...\n  audit_v4.vcxproj -> <output>\\build\\Debug\\audit_v4.exe\n  Building Custom Rule <root>/scripts/audit_ruleset_contracts/CMakeLists.txt\n",
+    "stderr": ""
+  },
+  {
+    "name": "Debug-v2-probe",
+    "argv": [
+      "<output>\\build\\Debug\\audit_v2.exe"
+    ],
+    "exit_code": 0,
+    "stderr": "",
+    "stdout_artifact": "v2-probe.jsonl",
+    "stdout_utf8_sha256": "182815c04dbd79c84a9c531e9897b13954bb795b966c99a2a47ccc042aaa131e"
+  },
+  {
+    "name": "Debug-v2-repeat",
+    "argv": [
+      "<output>\\build\\Debug\\audit_v2.exe"
+    ],
+    "exit_code": 0,
+    "stderr": "",
+    "stdout_artifact": "v2-probe.jsonl",
+    "stdout_utf8_sha256": "182815c04dbd79c84a9c531e9897b13954bb795b966c99a2a47ccc042aaa131e"
+  },
+  {
+    "name": "Debug-v4-probe",
+    "argv": [
+      "<output>\\build\\Debug\\audit_v4.exe"
+    ],
+    "exit_code": 0,
+    "stderr": "",
+    "stdout_artifact": "v4-probe.jsonl",
+    "stdout_utf8_sha256": "bb79494119c108a623cd812624042564033cd9991aa01afea3436c58097ca6de"
+  },
+  {
+    "name": "Debug-v4-repeat",
+    "argv": [
+      "<output>\\build\\Debug\\audit_v4.exe"
+    ],
+    "exit_code": 0,
+    "stderr": "",
+    "stdout_artifact": "v4-probe.jsonl",
+    "stdout_utf8_sha256": "bb79494119c108a623cd812624042564033cd9991aa01afea3436c58097ca6de"
+  },
+  {
+    "name": "Debug-v2-read-v2",
+    "argv": [
+      "<output>\\build\\Debug\\audit_v2.exe",
+      "--read-replay",
+      "<output>\\v2.pulse"
+    ],
+    "exit_code": 0,
+    "stdout": "{\"loaded\":true,\"verified\":true,\"ticks\":1,\"error\":\"\"}\n",
+    "stderr": ""
+  },
+  {
+    "name": "Debug-v2-read-v4",
+    "argv": [
+      "<output>\\build\\Debug\\audit_v2.exe",
+      "--read-replay",
+      "<output>\\v4.pulse"
+    ],
+    "exit_code": 0,
+    "stdout": "{\"loaded\":false,\"verified\":false,\"ticks\":0,\"error\":\"incompatible ruleset version\"}\n",
+    "stderr": ""
+  },
+  {
+    "name": "Debug-v2-read-historical_v2",
+    "argv": [
+      "<output>\\build\\Debug\\audit_v2.exe",
+      "--read-replay",
+      "<root>\\ai-docs\\portfolio-handoff-2026-09-18\\synthetic-preview.pulse"
+    ],
+    "exit_code": 0,
+    "stdout": "{\"loaded\":true,\"verified\":true,\"ticks\":5720,\"error\":\"\"}\n",
+    "stderr": ""
+  },
+  {
+    "name": "Debug-v4-read-v2",
+    "argv": [
+      "<output>\\build\\Debug\\audit_v4.exe",
+      "--read-replay",
+      "<output>\\v2.pulse"
+    ],
+    "exit_code": 0,
+    "stdout": "{\"loaded\":false,\"verified\":false,\"ticks\":0,\"error\":\"incompatible ruleset version\"}\n",
+    "stderr": ""
+  },
+  {
+    "name": "Debug-v4-read-v4",
+    "argv": [
+      "<output>\\build\\Debug\\audit_v4.exe",
+      "--read-replay",
+      "<output>\\v4.pulse"
+    ],
+    "exit_code": 0,
+    "stdout": "{\"loaded\":true,\"verified\":true,\"ticks\":1,\"error\":\"\"}\n",
+    "stderr": ""
+  },
+  {
+    "name": "Debug-v4-read-historical_v2",
+    "argv": [
+      "<output>\\build\\Debug\\audit_v4.exe",
+      "--read-replay",
+      "<root>\\ai-docs\\portfolio-handoff-2026-09-18\\synthetic-preview.pulse"
+    ],
+    "exit_code": 0,
+    "stdout": "{\"loaded\":false,\"verified\":false,\"ticks\":0,\"error\":\"incompatible ruleset version\"}\n",
+    "stderr": ""
+  }
+]

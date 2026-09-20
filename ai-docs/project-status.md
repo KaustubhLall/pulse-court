@@ -2,6 +2,15 @@
 
 ## Current checkpoint — 2026-09-20
 
+The [v2/v4 contract audit](ruleset-parity-audit-2026-09-20/README.md), tooling
+commit `0e28c22`, verifies concrete physics, observation-normalization, and
+touch/goal-provenance gaps on synthetic fixtures. All 648 decoder/mirror action
+mappings and 80 mask comparisons matched; Release/Debug outputs repeated
+exactly. A broader core migration is required; no production/reference source,
+frozen evidence, model, or authoritative behavior was changed by the audit.
+The handoff records raw outputs, identities, existing-tooling boundaries, and
+a scoped integration recommendation. No push or publication performed here.
+
 Local source commit `596d1f5` repairs replay admission: exact file extent is
 validated before tick allocation, malformed/trailing payloads fail with precise
 diagnostics, and failed loads preserve the caller's replay. Release and Debug

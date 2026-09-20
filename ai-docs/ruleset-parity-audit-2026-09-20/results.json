@@ -1,0 +1,1981 @@
+{
+  "schema_version": 1,
+  "observed_utc": "2026-09-20T22:15:08.514572+00:00",
+  "verdict": "NON_PARITY_ON_SYNTHETIC_FIXTURES",
+  "scope": "Hand-constructed contract probes; no policy/model loading, seeds, training, holdouts, or deployment",
+  "source_identity": {
+    "v2": {
+      "head": "3a3fe53030fb71e60f26c0e969462e825985bffd",
+      "status_porcelain": "?? scripts/audit_ruleset_contracts/",
+      "source_sha256": {
+        "src/core/fixed_math.cpp": "11051591f98d1ad07f3663bf2f62901faf74b502bb19dae3048580f5e2ea080a",
+        "src/core/fixed_math.hpp": "32d76ff4cfa19e3d083832cc779712876ad9882d394b332bcac52fec62c02d5f",
+        "src/core/pulse_sim.cpp": "c12633a9fd777a84282cf967284a8ad47495d999c3c8a0bffd6eb1903d6ddb47",
+        "src/core/pulse_sim.hpp": "4e6a22b5f41850055b5338acf571265b1f8de5d3e7b3c525af82ec99bac5252a",
+        "src/core/pulse_replay.cpp": "a50b1aeb1718d39aef1ca258767902e483788e79db56be231c4d817c023c05c4",
+        "src/core/pulse_replay.hpp": "795e7435eb32173a0b05fff27fba531f99e4a3980abf4c9a258f01d9bebc0268",
+        "src/ai/pulse_ai.cpp": "4c749cd7c6bdf757768cfcb97925dedaabe9fdc8125e6a7e967c2066f27493ad",
+        "src/ai/pulse_ai.hpp": "75ab610b7004e30aaf9f88cbc954fed9749871ede011c0e5d451b96a5b30ee16",
+        "src/ai/pulse_core_compat.hpp": "c526e498221053b480153bf7cbca6721cb0b309e0f7006094028b402d41e7570"
+      }
+    },
+    "v4": {
+      "head": "9a5dfef3cecf82ca985425852036c3fdc4bbefe5",
+      "status_porcelain": "M CMakeLists.txt\n M src/apps/headless_main.cpp\n M src/apps/viewer_win32.cpp\n M training/pulse_zero/curriculum.py\n M training/pulse_zero/evaluator.py\n M training/tests/test_cli_entrypoints.py\n?? docs/pulse-zero-deployment-challenge.md\n?? docs/pulse-zero-phase3-certification-deployment-plan.md\n?? src/ai/challenge_session.cpp\n?? src/ai/challenge_session.hpp\n?? src/ai/pulse_policy.cpp\n?? src/ai/pulse_policy.hpp\n?? src/ai/pulse_policy_adapter.cpp\n?? src/ai/pulse_policy_adapter.hpp\n?? src/apps/policy_verify_main.cpp\n?? tests/policy_tests.cpp\n?? tests/test_challenge_schedule.cpp\n?? training/adjudicate_dll_equivalence.py\n?? training/certify_candidate.py\n?? training/continue_phase4.py\n?? training/export_policy_bundle.py\n?? training/phase4_apply_dll_substitution.py\n?? training/tests/test_adjudicate_dll_equivalence.py\n?? training/tests/test_certify_candidate.py\n?? training/tests/test_export_policy_bundle.py\n?? training/tests/test_policy_bundle_parity.py\n?? training/tests/test_verify_dll_equivalence.py\n?? training/verify_dll_equivalence.py",
+      "source_sha256": {
+        "src/core/fixed_math.cpp": "11051591f98d1ad07f3663bf2f62901faf74b502bb19dae3048580f5e2ea080a",
+        "src/core/fixed_math.hpp": "32d76ff4cfa19e3d083832cc779712876ad9882d394b332bcac52fec62c02d5f",
+        "src/core/pulse_sim.cpp": "2555ab685e401dca29f4e2955c1bdcd307f1e553aec25a2a69177145498b41e7",
+        "src/core/pulse_sim.hpp": "b8930912067459502c5e3ec11740c0a156d03ebf3206c0ddb48c1d62729f917d",
+        "src/core/pulse_replay.cpp": "f593e88519007769a656c1d62e0ade2a9bb3dc2935f12554b9556ea2cfade059",
+        "src/core/pulse_replay.hpp": "67c9bb9a13dd23834de89079756fa27cd7baab006926958ac1182fc3e8b9cbed",
+        "src/ai/pulse_ai.cpp": "a4f435713ed63634428fbeca2482d2e467056eca5ae8eeff3610690c84984ccb",
+        "src/ai/pulse_ai.hpp": "a1a0b671cb8da9fdc652908455d21bfa121966a1062af20f987951a4c97e6ea9"
+      }
+    }
+  },
+  "audit_tooling_sha256": {
+    "CMakeLists.txt": "dc6d012846f03e26b31600931875d88fe1f028083897947d80daa357061f2633",
+    "probe.cpp": "d2ea9b79c8c75796507b13318db60618528324302dcd783b50675a48c2514641",
+    "run.py": "098243fe24dade301450b027fe8eeb14acbbdf1524e709f15aa718fd62bc7040"
+  },
+  "executable_sha256": {
+    "Release-v2": "dbe28b2f5f828bf8f3f942de445aa0351caeb824063bde08c778512fb7bec7f7",
+    "Release-v4": "3bac0f27bd376431b1ed3e7d4c1719f4f262081cf5fe1e734dabc80b4d13553b",
+    "Debug-v2": "8ec575c54cd8463ff8beeca9fd9753c412561ed4b914257fcbc6b4fa362ac9cc",
+    "Debug-v4": "7ae2fa02a9e700efc422fd816ba4a4c51eee6180f182906918daa1008c568877"
+  },
+  "metadata": {
+    "v2": {
+      "type": "metadata",
+      "ruleset": 2,
+      "replay_format": 1,
+      "observation_size": 64,
+      "agent_contract": 2,
+      "physics_constants": [
+        380,
+        210,
+        155,
+        90
+      ]
+    },
+    "v4": {
+      "type": "metadata",
+      "ruleset": 4,
+      "replay_format": 1,
+      "observation_size": 64,
+      "agent_contract": 2,
+      "physics_constants": [
+        320,
+        180,
+        135,
+        75
+      ]
+    }
+  },
+  "repeatability": {
+    "two_runs_per_binary_exact": true,
+    "release_debug_exact": true
+  },
+  "state_fixture_records": 40,
+  "action_cases": 648,
+  "action_mapping_equal": true,
+  "metadata_differences": {
+    "physics_constants": {
+      "v2": [
+        380,
+        210,
+        155,
+        90
+      ],
+      "v4": [
+        320,
+        180,
+        135,
+        75
+      ]
+    }
+  },
+  "mask_cases": 80,
+  "mask_mismatches": [],
+  "observation_differences": [
+    {
+      "fixture": "velocity_normalization",
+      "stage": "before",
+      "seat": 0,
+      "slot": 2,
+      "v2": 0.421052635,
+      "v4": 0.5,
+      "v2_bits": 1054315574,
+      "v4_bits": 1056964608
+    },
+    {
+      "fixture": "velocity_normalization",
+      "stage": "before",
+      "seat": 0,
+      "slot": 3,
+      "v2": -0.210526317,
+      "v4": -0.25,
+      "v2_bits": 3193410614,
+      "v4_bits": 3196059648
+    },
+    {
+      "fixture": "velocity_normalization",
+      "stage": "before",
+      "seat": 1,
+      "slot": 2,
+      "v2": -0.421052635,
+      "v4": -0.5,
+      "v2_bits": 3201799222,
+      "v4_bits": 3204448256
+    },
+    {
+      "fixture": "velocity_normalization",
+      "stage": "before",
+      "seat": 1,
+      "slot": 3,
+      "v2": -0.210526317,
+      "v4": -0.25,
+      "v2_bits": 3193410614,
+      "v4_bits": 3196059648
+    },
+    {
+      "fixture": "free_core_velocity",
+      "stage": "before",
+      "seat": 0,
+      "slot": 2,
+      "v2": 0.921052635,
+      "v4": 1,
+      "v2_bits": 1064028699,
+      "v4_bits": 1065353216
+    },
+    {
+      "fixture": "free_core_velocity",
+      "stage": "before",
+      "seat": 1,
+      "slot": 2,
+      "v2": -0.921052635,
+      "v4": -1,
+      "v2_bits": 3211512347,
+      "v4_bits": 3212836864
+    },
+    {
+      "fixture": "free_core_velocity",
+      "stage": "after_one_tick",
+      "seat": 0,
+      "slot": 0,
+      "v2": 0.0179892778,
+      "v4": 0.0164474249,
+      "v2_bits": 1016290880,
+      "v4_bits": 1015463104
+    },
+    {
+      "fixture": "free_core_velocity",
+      "stage": "after_one_tick",
+      "seat": 0,
+      "slot": 2,
+      "v2": 0.91842103,
+      "v4": 0.996874988,
+      "v2_bits": 1063984548,
+      "v4_bits": 1065300787
+    },
+    {
+      "fixture": "free_core_velocity",
+      "stage": "after_one_tick",
+      "seat": 1,
+      "slot": 0,
+      "v2": -0.0179893374,
+      "v4": -0.0164473653,
+      "v2_bits": 3163774560,
+      "v4_bits": 3162946720
+    },
+    {
+      "fixture": "free_core_velocity",
+      "stage": "after_one_tick",
+      "seat": 1,
+      "slot": 2,
+      "v2": -0.91842103,
+      "v4": -0.996874988,
+      "v2_bits": 3211468196,
+      "v4_bits": 3212784435
+    },
+    {
+      "fixture": "synthetic_prior_touch_1",
+      "stage": "before",
+      "seat": 0,
+      "slot": 16,
+      "v2": 0,
+      "v4": 1,
+      "v2_bits": 0,
+      "v4_bits": 1065353216
+    },
+    {
+      "fixture": "synthetic_prior_touch_1",
+      "stage": "before",
+      "seat": 0,
+      "slot": 17,
+      "v2": 1,
+      "v4": 0,
+      "v2_bits": 1065353216,
+      "v4_bits": 0
+    },
+    {
+      "fixture": "synthetic_prior_touch_1",
+      "stage": "before",
+      "seat": 1,
+      "slot": 16,
+      "v2": 0,
+      "v4": 1,
+      "v2_bits": 0,
+      "v4_bits": 1065353216
+    },
+    {
+      "fixture": "synthetic_prior_touch_1",
+      "stage": "before",
+      "seat": 1,
+      "slot": 17,
+      "v2": 1,
+      "v4": 0,
+      "v2_bits": 1065353216,
+      "v4_bits": 0
+    },
+    {
+      "fixture": "synthetic_prior_touch_3",
+      "stage": "before",
+      "seat": 0,
+      "slot": 17,
+      "v2": 1,
+      "v4": 0,
+      "v2_bits": 1065353216,
+      "v4_bits": 0
+    },
+    {
+      "fixture": "synthetic_prior_touch_3",
+      "stage": "before",
+      "seat": 0,
+      "slot": 18,
+      "v2": 0,
+      "v4": 1,
+      "v2_bits": 0,
+      "v4_bits": 1065353216
+    },
+    {
+      "fixture": "synthetic_prior_touch_3",
+      "stage": "before",
+      "seat": 1,
+      "slot": 17,
+      "v2": 1,
+      "v4": 0,
+      "v2_bits": 1065353216,
+      "v4_bits": 0
+    },
+    {
+      "fixture": "synthetic_prior_touch_3",
+      "stage": "before",
+      "seat": 1,
+      "slot": 18,
+      "v2": 0,
+      "v4": 1,
+      "v2_bits": 0,
+      "v4_bits": 1065353216
+    },
+    {
+      "fixture": "synthetic_prior_touch_4",
+      "stage": "before",
+      "seat": 0,
+      "slot": 17,
+      "v2": 1,
+      "v4": 0,
+      "v2_bits": 1065353216,
+      "v4_bits": 0
+    },
+    {
+      "fixture": "synthetic_prior_touch_4",
+      "stage": "before",
+      "seat": 0,
+      "slot": 19,
+      "v2": 0,
+      "v4": 1,
+      "v2_bits": 0,
+      "v4_bits": 1065353216
+    },
+    {
+      "fixture": "synthetic_prior_touch_4",
+      "stage": "before",
+      "seat": 1,
+      "slot": 17,
+      "v2": 1,
+      "v4": 0,
+      "v2_bits": 1065353216,
+      "v4_bits": 0
+    },
+    {
+      "fixture": "synthetic_prior_touch_4",
+      "stage": "before",
+      "seat": 1,
+      "slot": 19,
+      "v2": 0,
+      "v4": 1,
+      "v2_bits": 0,
+      "v4_bits": 1065353216
+    },
+    {
+      "fixture": "strike",
+      "stage": "after_one_tick",
+      "seat": 0,
+      "slot": 0,
+      "v2": -0.430458486,
+      "v4": -0.432000399,
+      "v2_bits": 3202114830,
+      "v4_bits": 3202166568
+    },
+    {
+      "fixture": "strike",
+      "stage": "after_one_tick",
+      "seat": 0,
+      "slot": 2,
+      "v2": 0.550000012,
+      "v4": 0.559374988,
+      "v2_bits": 1057803469,
+      "v4_bits": 1057960755
+    },
+    {
+      "fixture": "strike",
+      "stage": "after_one_tick",
+      "seat": 0,
+      "slot": 16,
+      "v2": 0,
+      "v4": 1,
+      "v2_bits": 0,
+      "v4_bits": 1065353216
+    },
+    {
+      "fixture": "strike",
+      "stage": "after_one_tick",
+      "seat": 0,
+      "slot": 17,
+      "v2": 1,
+      "v4": 0,
+      "v2_bits": 1065353216,
+      "v4_bits": 0
+    },
+    {
+      "fixture": "strike",
+      "stage": "after_one_tick",
+      "seat": 1,
+      "slot": 0,
+      "v2": 0.430458426,
+      "v4": 0.432000399,
+      "v2_bits": 1054631180,
+      "v4_bits": 1054682920
+    },
+    {
+      "fixture": "strike",
+      "stage": "after_one_tick",
+      "seat": 1,
+      "slot": 2,
+      "v2": -0.550000012,
+      "v4": -0.559374988,
+      "v2_bits": 3205287117,
+      "v4_bits": 3205444403
+    },
+    {
+      "fixture": "strike",
+      "stage": "after_one_tick",
+      "seat": 1,
+      "slot": 16,
+      "v2": 0,
+      "v4": 1,
+      "v2_bits": 0,
+      "v4_bits": 1065353216
+    },
+    {
+      "fixture": "strike",
+      "stage": "after_one_tick",
+      "seat": 1,
+      "slot": 17,
+      "v2": 1,
+      "v4": 0,
+      "v2_bits": 1065353216,
+      "v4_bits": 0
+    },
+    {
+      "fixture": "jetstep_strike",
+      "stage": "after_one_tick",
+      "seat": 0,
+      "slot": 0,
+      "v2": -0.425832629,
+      "v4": -0.428145587,
+      "v2_bits": 3201959612,
+      "v4_bits": 3202037222
+    },
+    {
+      "fixture": "jetstep_strike",
+      "stage": "after_one_tick",
+      "seat": 0,
+      "slot": 2,
+      "v2": 0.786842108,
+      "v4": 0.793749988,
+      "v2_bits": 1061777020,
+      "v4_bits": 1061892915
+    },
+    {
+      "fixture": "jetstep_strike",
+      "stage": "after_one_tick",
+      "seat": 0,
+      "slot": 16,
+      "v2": 0,
+      "v4": 1,
+      "v2_bits": 0,
+      "v4_bits": 1065353216
+    },
+    {
+      "fixture": "jetstep_strike",
+      "stage": "after_one_tick",
+      "seat": 0,
+      "slot": 17,
+      "v2": 1,
+      "v4": 0,
+      "v2_bits": 1065353216,
+      "v4_bits": 0
+    },
+    {
+      "fixture": "jetstep_strike",
+      "stage": "after_one_tick",
+      "seat": 1,
+      "slot": 0,
+      "v2": 0.425832629,
+      "v4": 0.428145528,
+      "v2_bits": 1054475964,
+      "v4_bits": 1054553572
+    },
+    {
+      "fixture": "jetstep_strike",
+      "stage": "after_one_tick",
+      "seat": 1,
+      "slot": 2,
+      "v2": -0.786842108,
+      "v4": -0.793749988,
+      "v2_bits": 3209260668,
+      "v4_bits": 3209376563
+    },
+    {
+      "fixture": "jetstep_strike",
+      "stage": "after_one_tick",
+      "seat": 1,
+      "slot": 16,
+      "v2": 0,
+      "v4": 1,
+      "v2_bits": 0,
+      "v4_bits": 1065353216
+    },
+    {
+      "fixture": "jetstep_strike",
+      "stage": "after_one_tick",
+      "seat": 1,
+      "slot": 17,
+      "v2": 1,
+      "v4": 0,
+      "v2_bits": 1065353216,
+      "v4_bits": 0
+    },
+    {
+      "fixture": "player_body",
+      "stage": "before",
+      "seat": 0,
+      "slot": 2,
+      "v2": -0.526315808,
+      "v4": -0.625,
+      "v2_bits": 3204889762,
+      "v4_bits": 3206545408
+    },
+    {
+      "fixture": "player_body",
+      "stage": "before",
+      "seat": 1,
+      "slot": 2,
+      "v2": 0.526315808,
+      "v4": 0.625,
+      "v2_bits": 1057406114,
+      "v4_bits": 1059061760
+    },
+    {
+      "fixture": "player_body",
+      "stage": "after_one_tick",
+      "seat": 0,
+      "slot": 2,
+      "v2": 0.457894742,
+      "v4": 0.543749988,
+      "v2_bits": 1055551790,
+      "v4_bits": 1057698611
+    },
+    {
+      "fixture": "player_body",
+      "stage": "after_one_tick",
+      "seat": 0,
+      "slot": 12,
+      "v2": 1,
+      "v4": 0,
+      "v2_bits": 1065353216,
+      "v4_bits": 0
+    },
+    {
+      "fixture": "player_body",
+      "stage": "after_one_tick",
+      "seat": 0,
+      "slot": 13,
+      "v2": 0,
+      "v4": 1,
+      "v2_bits": 0,
+      "v4_bits": 1065353216
+    },
+    {
+      "fixture": "player_body",
+      "stage": "after_one_tick",
+      "seat": 0,
+      "slot": 15,
+      "v2": 1,
+      "v4": 0,
+      "v2_bits": 1065353216,
+      "v4_bits": 0
+    },
+    {
+      "fixture": "player_body",
+      "stage": "after_one_tick",
+      "seat": 0,
+      "slot": 17,
+      "v2": 0,
+      "v4": 1,
+      "v2_bits": 0,
+      "v4_bits": 1065353216
+    },
+    {
+      "fixture": "player_body",
+      "stage": "after_one_tick",
+      "seat": 1,
+      "slot": 2,
+      "v2": -0.457894742,
+      "v4": -0.543749988,
+      "v2_bits": 3203035438,
+      "v4_bits": 3205182259
+    },
+    {
+      "fixture": "player_body",
+      "stage": "after_one_tick",
+      "seat": 1,
+      "slot": 12,
+      "v2": 1,
+      "v4": 0,
+      "v2_bits": 1065353216,
+      "v4_bits": 0
+    },
+    {
+      "fixture": "player_body",
+      "stage": "after_one_tick",
+      "seat": 1,
+      "slot": 14,
+      "v2": 0,
+      "v4": 1,
+      "v2_bits": 0,
+      "v4_bits": 1065353216
+    },
+    {
+      "fixture": "player_body",
+      "stage": "after_one_tick",
+      "seat": 1,
+      "slot": 15,
+      "v2": 1,
+      "v4": 0,
+      "v2_bits": 1065353216,
+      "v4_bits": 0
+    },
+    {
+      "fixture": "player_body",
+      "stage": "after_one_tick",
+      "seat": 1,
+      "slot": 17,
+      "v2": 0,
+      "v4": 1,
+      "v2_bits": 0,
+      "v4_bits": 1065353216
+    },
+    {
+      "fixture": "anchor_well",
+      "stage": "after_one_tick",
+      "seat": 0,
+      "slot": 2,
+      "v2": -0.018421052,
+      "v4": -0.0218749996,
+      "v2_bits": 3164006335,
+      "v4_bits": 3165860659
+    },
+    {
+      "fixture": "anchor_well",
+      "stage": "after_one_tick",
+      "seat": 0,
+      "slot": 12,
+      "v2": 1,
+      "v4": 0,
+      "v2_bits": 1065353216,
+      "v4_bits": 0
+    },
+    {
+      "fixture": "anchor_well",
+      "stage": "after_one_tick",
+      "seat": 0,
+      "slot": 13,
+      "v2": 0,
+      "v4": 1,
+      "v2_bits": 0,
+      "v4_bits": 1065353216
+    },
+    {
+      "fixture": "anchor_well",
+      "stage": "after_one_tick",
+      "seat": 0,
+      "slot": 15,
+      "v2": 1,
+      "v4": 0,
+      "v2_bits": 1065353216,
+      "v4_bits": 0
+    },
+    {
+      "fixture": "anchor_well",
+      "stage": "after_one_tick",
+      "seat": 0,
+      "slot": 18,
+      "v2": 0,
+      "v4": 1,
+      "v2_bits": 0,
+      "v4_bits": 1065353216
+    },
+    {
+      "fixture": "anchor_well",
+      "stage": "after_one_tick",
+      "seat": 1,
+      "slot": 2,
+      "v2": 0.018421052,
+      "v4": 0.0218749996,
+      "v2_bits": 1016522687,
+      "v4_bits": 1018377011
+    },
+    {
+      "fixture": "anchor_well",
+      "stage": "after_one_tick",
+      "seat": 1,
+      "slot": 12,
+      "v2": 1,
+      "v4": 0,
+      "v2_bits": 1065353216,
+      "v4_bits": 0
+    },
+    {
+      "fixture": "anchor_well",
+      "stage": "after_one_tick",
+      "seat": 1,
+      "slot": 14,
+      "v2": 0,
+      "v4": 1,
+      "v2_bits": 0,
+      "v4_bits": 1065353216
+    },
+    {
+      "fixture": "anchor_well",
+      "stage": "after_one_tick",
+      "seat": 1,
+      "slot": 15,
+      "v2": 1,
+      "v4": 0,
+      "v2_bits": 1065353216,
+      "v4_bits": 0
+    },
+    {
+      "fixture": "anchor_well",
+      "stage": "after_one_tick",
+      "seat": 1,
+      "slot": 18,
+      "v2": 0,
+      "v4": 1,
+      "v2_bits": 0,
+      "v4_bits": 1065353216
+    },
+    {
+      "fixture": "pulse_gate",
+      "stage": "before",
+      "seat": 0,
+      "slot": 2,
+      "v2": 0.789473712,
+      "v4": 0.9375,
+      "v2_bits": 1061821171,
+      "v4_bits": 1064304640
+    },
+    {
+      "fixture": "pulse_gate",
+      "stage": "before",
+      "seat": 1,
+      "slot": 2,
+      "v2": -0.789473712,
+      "v4": -0.9375,
+      "v2_bits": 3209304819,
+      "v4_bits": 3211788288
+    },
+    {
+      "fixture": "pulse_gate",
+      "stage": "after_one_tick",
+      "seat": 0,
+      "slot": 2,
+      "v2": -0.686842084,
+      "v4": -0.815625012,
+      "v2_bits": 3207582946,
+      "v4_bits": 3209743565
+    },
+    {
+      "fixture": "pulse_gate",
+      "stage": "after_one_tick",
+      "seat": 0,
+      "slot": 12,
+      "v2": 1,
+      "v4": 0,
+      "v2_bits": 1065353216,
+      "v4_bits": 0
+    },
+    {
+      "fixture": "pulse_gate",
+      "stage": "after_one_tick",
+      "seat": 0,
+      "slot": 13,
+      "v2": 0,
+      "v4": 1,
+      "v2_bits": 0,
+      "v4_bits": 1065353216
+    },
+    {
+      "fixture": "pulse_gate",
+      "stage": "after_one_tick",
+      "seat": 0,
+      "slot": 15,
+      "v2": 1,
+      "v4": 0,
+      "v2_bits": 1065353216,
+      "v4_bits": 0
+    },
+    {
+      "fixture": "pulse_gate",
+      "stage": "after_one_tick",
+      "seat": 0,
+      "slot": 19,
+      "v2": 0,
+      "v4": 1,
+      "v2_bits": 0,
+      "v4_bits": 1065353216
+    },
+    {
+      "fixture": "pulse_gate",
+      "stage": "after_one_tick",
+      "seat": 1,
+      "slot": 2,
+      "v2": 0.686842084,
+      "v4": 0.815625012,
+      "v2_bits": 1060099298,
+      "v4_bits": 1062259917
+    },
+    {
+      "fixture": "pulse_gate",
+      "stage": "after_one_tick",
+      "seat": 1,
+      "slot": 12,
+      "v2": 1,
+      "v4": 0,
+      "v2_bits": 1065353216,
+      "v4_bits": 0
+    },
+    {
+      "fixture": "pulse_gate",
+      "stage": "after_one_tick",
+      "seat": 1,
+      "slot": 14,
+      "v2": 0,
+      "v4": 1,
+      "v2_bits": 0,
+      "v4_bits": 1065353216
+    },
+    {
+      "fixture": "pulse_gate",
+      "stage": "after_one_tick",
+      "seat": 1,
+      "slot": 15,
+      "v2": 1,
+      "v4": 0,
+      "v2_bits": 1065353216,
+      "v4_bits": 0
+    },
+    {
+      "fixture": "pulse_gate",
+      "stage": "after_one_tick",
+      "seat": 1,
+      "slot": 19,
+      "v2": 0,
+      "v4": 1,
+      "v2_bits": 0,
+      "v4_bits": 1065353216
+    },
+    {
+      "fixture": "nonwinning_goal_reset",
+      "stage": "before",
+      "seat": 0,
+      "slot": 2,
+      "v2": 0.789473712,
+      "v4": 0.9375,
+      "v2_bits": 1061821171,
+      "v4_bits": 1064304640
+    },
+    {
+      "fixture": "nonwinning_goal_reset",
+      "stage": "before",
+      "seat": 0,
+      "slot": 16,
+      "v2": 0,
+      "v4": 1,
+      "v2_bits": 0,
+      "v4_bits": 1065353216
+    },
+    {
+      "fixture": "nonwinning_goal_reset",
+      "stage": "before",
+      "seat": 0,
+      "slot": 17,
+      "v2": 1,
+      "v4": 0,
+      "v2_bits": 1065353216,
+      "v4_bits": 0
+    },
+    {
+      "fixture": "nonwinning_goal_reset",
+      "stage": "before",
+      "seat": 1,
+      "slot": 2,
+      "v2": -0.789473712,
+      "v4": -0.9375,
+      "v2_bits": 3209304819,
+      "v4_bits": 3211788288
+    },
+    {
+      "fixture": "nonwinning_goal_reset",
+      "stage": "before",
+      "seat": 1,
+      "slot": 16,
+      "v2": 0,
+      "v4": 1,
+      "v2_bits": 0,
+      "v4_bits": 1065353216
+    },
+    {
+      "fixture": "nonwinning_goal_reset",
+      "stage": "before",
+      "seat": 1,
+      "slot": 17,
+      "v2": 1,
+      "v4": 0,
+      "v2_bits": 1065353216,
+      "v4_bits": 0
+    }
+  ],
+  "state_and_touch_differences": [
+    {
+      "fixture": "free_core_velocity",
+      "stage": "after_one_tick",
+      "field": "common",
+      "v2": {
+        "clock": [
+          1,
+          1,
+          0,
+          21599,
+          0,
+          0,
+          0
+        ],
+        "config": [
+          5,
+          21600,
+          90
+        ],
+        "core": [
+          19806,
+          11264,
+          349,
+          0
+        ],
+        "last_touch": -1,
+        "players": [
+          [
+            0,
+            9728,
+            11264,
+            0,
+            0,
+            1024,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            1,
+            29184,
+            11264,
+            0,
+            0,
+            -1024,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ]
+      },
+      "v4": {
+        "clock": [
+          1,
+          1,
+          0,
+          21599,
+          0,
+          0,
+          0
+        ],
+        "config": [
+          5,
+          21600,
+          90
+        ],
+        "core": [
+          19776,
+          11264,
+          319,
+          0
+        ],
+        "last_touch": -1,
+        "players": [
+          [
+            0,
+            9728,
+            11264,
+            0,
+            0,
+            1024,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            1,
+            29184,
+            11264,
+            0,
+            0,
+            -1024,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ]
+      }
+    },
+    {
+      "fixture": "synthetic_prior_touch_1",
+      "stage": "before",
+      "field": "touch_kind",
+      "v2": 2,
+      "v4": 1
+    },
+    {
+      "fixture": "synthetic_prior_touch_3",
+      "stage": "before",
+      "field": "touch_kind",
+      "v2": 2,
+      "v4": 3
+    },
+    {
+      "fixture": "synthetic_prior_touch_4",
+      "stage": "before",
+      "field": "touch_kind",
+      "v2": 2,
+      "v4": 4
+    },
+    {
+      "fixture": "strike",
+      "stage": "after_one_tick",
+      "field": "common",
+      "v2": {
+        "clock": [
+          1,
+          1,
+          0,
+          21599,
+          0,
+          0,
+          0
+        ],
+        "config": [
+          5,
+          21600,
+          90
+        ],
+        "core": [
+          11081,
+          11264,
+          209,
+          0
+        ],
+        "last_touch": 0,
+        "players": [
+          [
+            0,
+            9728,
+            11264,
+            0,
+            0,
+            1024,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            6,
+            36,
+            0,
+            0,
+            0
+          ],
+          [
+            1,
+            29184,
+            11264,
+            0,
+            0,
+            -1024,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ]
+      },
+      "v4": {
+        "clock": [
+          1,
+          1,
+          0,
+          21599,
+          0,
+          0,
+          0
+        ],
+        "config": [
+          5,
+          21600,
+          90
+        ],
+        "core": [
+          11051,
+          11264,
+          179,
+          0
+        ],
+        "last_touch": 0,
+        "players": [
+          [
+            0,
+            9728,
+            11264,
+            0,
+            0,
+            1024,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            6,
+            36,
+            0,
+            0,
+            0
+          ],
+          [
+            1,
+            29184,
+            11264,
+            0,
+            0,
+            -1024,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ]
+      }
+    },
+    {
+      "fixture": "strike",
+      "stage": "after_one_tick",
+      "field": "touch_kind",
+      "v2": 2,
+      "v4": 1
+    },
+    {
+      "fixture": "jetstep_strike",
+      "stage": "after_one_tick",
+      "field": "common",
+      "v2": {
+        "clock": [
+          1,
+          1,
+          0,
+          21599,
+          0,
+          0,
+          0
+        ],
+        "config": [
+          5,
+          21600,
+          90
+        ],
+        "core": [
+          11171,
+          11264,
+          299,
+          0
+        ],
+        "last_touch": 0,
+        "players": [
+          [
+            0,
+            9728,
+            11264,
+            0,
+            0,
+            1024,
+            0,
+            0,
+            0,
+            1,
+            1,
+            1,
+            6,
+            36,
+            0,
+            0,
+            44
+          ],
+          [
+            1,
+            29184,
+            11264,
+            0,
+            0,
+            -1024,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ]
+      },
+      "v4": {
+        "clock": [
+          1,
+          1,
+          0,
+          21599,
+          0,
+          0,
+          0
+        ],
+        "config": [
+          5,
+          21600,
+          90
+        ],
+        "core": [
+          11126,
+          11264,
+          254,
+          0
+        ],
+        "last_touch": 0,
+        "players": [
+          [
+            0,
+            9728,
+            11264,
+            0,
+            0,
+            1024,
+            0,
+            0,
+            0,
+            1,
+            1,
+            1,
+            6,
+            36,
+            0,
+            0,
+            44
+          ],
+          [
+            1,
+            29184,
+            11264,
+            0,
+            0,
+            -1024,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ]
+      }
+    },
+    {
+      "fixture": "jetstep_strike",
+      "stage": "after_one_tick",
+      "field": "touch_kind",
+      "v2": 2,
+      "v4": 1
+    },
+    {
+      "fixture": "player_body",
+      "stage": "after_one_tick",
+      "field": "common",
+      "v2": {
+        "clock": [
+          1,
+          1,
+          0,
+          21599,
+          0,
+          0,
+          0
+        ],
+        "config": [
+          5,
+          21600,
+          90
+        ],
+        "core": [
+          10910,
+          11264,
+          174,
+          0
+        ],
+        "last_touch": -1,
+        "players": [
+          [
+            0,
+            9728,
+            11264,
+            0,
+            0,
+            1024,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            1,
+            29184,
+            11264,
+            0,
+            0,
+            -1024,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ]
+      },
+      "v4": {
+        "clock": [
+          1,
+          1,
+          0,
+          21599,
+          0,
+          0,
+          0
+        ],
+        "config": [
+          5,
+          21600,
+          90
+        ],
+        "core": [
+          10910,
+          11264,
+          174,
+          0
+        ],
+        "last_touch": 0,
+        "players": [
+          [
+            0,
+            9728,
+            11264,
+            0,
+            0,
+            1024,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            1,
+            29184,
+            11264,
+            0,
+            0,
+            -1024,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ]
+      }
+    },
+    {
+      "fixture": "player_body",
+      "stage": "after_one_tick",
+      "field": "touch_kind",
+      "v2": 0,
+      "v4": 2
+    },
+    {
+      "fixture": "anchor_well",
+      "stage": "after_one_tick",
+      "field": "common",
+      "v2": {
+        "clock": [
+          1,
+          1,
+          0,
+          21599,
+          0,
+          0,
+          0
+        ],
+        "config": [
+          5,
+          21600,
+          90
+        ],
+        "core": [
+          15864,
+          11264,
+          -7,
+          0
+        ],
+        "last_touch": -1,
+        "players": [
+          [
+            1,
+            9728,
+            11264,
+            0,
+            0,
+            1024,
+            0,
+            13824,
+            11264,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            119
+          ],
+          [
+            1,
+            29184,
+            11264,
+            0,
+            0,
+            -1024,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ]
+      },
+      "v4": {
+        "clock": [
+          1,
+          1,
+          0,
+          21599,
+          0,
+          0,
+          0
+        ],
+        "config": [
+          5,
+          21600,
+          90
+        ],
+        "core": [
+          15864,
+          11264,
+          -7,
+          0
+        ],
+        "last_touch": 0,
+        "players": [
+          [
+            1,
+            9728,
+            11264,
+            0,
+            0,
+            1024,
+            0,
+            13824,
+            11264,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            119
+          ],
+          [
+            1,
+            29184,
+            11264,
+            0,
+            0,
+            -1024,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ]
+      }
+    },
+    {
+      "fixture": "anchor_well",
+      "stage": "after_one_tick",
+      "field": "touch_kind",
+      "v2": 0,
+      "v4": 3
+    },
+    {
+      "fixture": "pulse_gate",
+      "stage": "after_one_tick",
+      "field": "common",
+      "v2": {
+        "clock": [
+          1,
+          1,
+          0,
+          21599,
+          0,
+          0,
+          0
+        ],
+        "config": [
+          5,
+          21600,
+          90
+        ],
+        "core": [
+          10775,
+          11264,
+          -261,
+          0
+        ],
+        "last_touch": -1,
+        "players": [
+          [
+            2,
+            1000,
+            11264,
+            0,
+            0,
+            1024,
+            0,
+            13824,
+            11264,
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            119
+          ],
+          [
+            1,
+            29184,
+            11264,
+            0,
+            0,
+            -1024,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ]
+      },
+      "v4": {
+        "clock": [
+          1,
+          1,
+          0,
+          21599,
+          0,
+          0,
+          0
+        ],
+        "config": [
+          5,
+          21600,
+          90
+        ],
+        "core": [
+          10775,
+          11264,
+          -261,
+          0
+        ],
+        "last_touch": 0,
+        "players": [
+          [
+            2,
+            1000,
+            11264,
+            0,
+            0,
+            1024,
+            0,
+            13824,
+            11264,
+            3,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            119
+          ],
+          [
+            1,
+            29184,
+            11264,
+            0,
+            0,
+            -1024,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        ]
+      }
+    },
+    {
+      "fixture": "pulse_gate",
+      "stage": "after_one_tick",
+      "field": "touch_kind",
+      "v2": 0,
+      "v4": 4
+    },
+    {
+      "fixture": "nonwinning_goal_reset",
+      "stage": "before",
+      "field": "touch_kind",
+      "v2": 2,
+      "v4": 1
+    },
+    {
+      "fixture": "nonwinning_goal_reset",
+      "stage": "after_one_tick",
+      "field": "goal_result",
+      "v2": [
+        1,
+        0,
+        0,
+        -1,
+        0
+      ],
+      "v4": [
+        1,
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  ],
+  "replay_checks": [
+    {
+      "configuration": "Release",
+      "reader": "v2",
+      "writer": "v2",
+      "loaded": true,
+      "verified": true,
+      "ticks": 1,
+      "error": ""
+    },
+    {
+      "configuration": "Release",
+      "reader": "v2",
+      "writer": "v4",
+      "loaded": false,
+      "verified": false,
+      "ticks": 0,
+      "error": "incompatible ruleset version"
+    },
+    {
+      "configuration": "Release",
+      "reader": "v2",
+      "writer": "historical_v2",
+      "loaded": true,
+      "verified": true,
+      "ticks": 5720,
+      "error": ""
+    },
+    {
+      "configuration": "Release",
+      "reader": "v4",
+      "writer": "v2",
+      "loaded": false,
+      "verified": false,
+      "ticks": 0,
+      "error": "incompatible ruleset version"
+    },
+    {
+      "configuration": "Release",
+      "reader": "v4",
+      "writer": "v4",
+      "loaded": true,
+      "verified": true,
+      "ticks": 1,
+      "error": ""
+    },
+    {
+      "configuration": "Release",
+      "reader": "v4",
+      "writer": "historical_v2",
+      "loaded": false,
+      "verified": false,
+      "ticks": 0,
+      "error": "incompatible ruleset version"
+    },
+    {
+      "configuration": "Debug",
+      "reader": "v2",
+      "writer": "v2",
+      "loaded": true,
+      "verified": true,
+      "ticks": 1,
+      "error": ""
+    },
+    {
+      "configuration": "Debug",
+      "reader": "v2",
+      "writer": "v4",
+      "loaded": false,
+      "verified": false,
+      "ticks": 0,
+      "error": "incompatible ruleset version"
+    },
+    {
+      "configuration": "Debug",
+      "reader": "v2",
+      "writer": "historical_v2",
+      "loaded": true,
+      "verified": true,
+      "ticks": 5720,
+      "error": ""
+    },
+    {
+      "configuration": "Debug",
+      "reader": "v4",
+      "writer": "v2",
+      "loaded": false,
+      "verified": false,
+      "ticks": 0,
+      "error": "incompatible ruleset version"
+    },
+    {
+      "configuration": "Debug",
+      "reader": "v4",
+      "writer": "v4",
+      "loaded": true,
+      "verified": true,
+      "ticks": 1,
+      "error": ""
+    },
+    {
+      "configuration": "Debug",
+      "reader": "v4",
+      "writer": "historical_v2",
+      "loaded": false,
+      "verified": false,
+      "ticks": 0,
+      "error": "incompatible ruleset version"
+    }
+  ],
+  "historical_replay_sha256_unchanged": "35af43287d7c8ae9f4e13d3103fc0f38d62d18b4d41d4a275534aff78c695f28",
+  "reference_source_and_status_unchanged": true,
+  "raw_hash_note": "Raw hashes are preserved, not used as semantic parity criteria: ruleset and touch-kind hash schema differ.",
+  "limitations": [
+    "Synthetic fixtures are diagnostic, not exhaustive state-space parity or trained-model certification.",
+    "Probe links existing core/AI source directly; C ABI wrapper and policy inference are not executed.",
+    "No authoritative simulation, policy, viewer, training, frozen artifact, or reference-clone files changed."
+  ],
+  "audit_tooling_commit": "0e28c2217590c05776e059fd6af9ef0ff0c7481a",
+  "input_source_matches_committed_head": {
+    "v2": {
+      "src/core/fixed_math.cpp": {
+        "lf_normalized_matches_head": true,
+        "git_blob_sha1": "3e1538582ea77a7ce857aebeaa6c25443d97309f"
+      },
+      "src/core/fixed_math.hpp": {
+        "lf_normalized_matches_head": true,
+        "git_blob_sha1": "5dd14883cb8610071f547df28a566e0abc5b9ae3"
+      },
+      "src/core/pulse_sim.cpp": {
+        "lf_normalized_matches_head": true,
+        "git_blob_sha1": "f7392b3ab0661c1b449ae2d8a2b8e7e980cedb25"
+      },
+      "src/core/pulse_sim.hpp": {
+        "lf_normalized_matches_head": true,
+        "git_blob_sha1": "5ee907d05995d0c7ce358b3666b8730598a4d05c"
+      },
+      "src/core/pulse_replay.cpp": {
+        "lf_normalized_matches_head": true,
+        "git_blob_sha1": "5e3308c482a60f8f321abdab17488ffd8b1f3218"
+      },
+      "src/core/pulse_replay.hpp": {
+        "lf_normalized_matches_head": true,
+        "git_blob_sha1": "6e085b51bc3631f4bf6308398a7a2956f073636d"
+      },
+      "src/ai/pulse_ai.cpp": {
+        "lf_normalized_matches_head": true,
+        "git_blob_sha1": "b85afbd08077962e50273e1f4c1770345bd700ab"
+      },
+      "src/ai/pulse_ai.hpp": {
+        "lf_normalized_matches_head": true,
+        "git_blob_sha1": "0c2a20c851a46acf1ee9748f6feab18072ecc342"
+      },
+      "src/ai/pulse_core_compat.hpp": {
+        "lf_normalized_matches_head": true,
+        "git_blob_sha1": "a3fdd61f00de6b7ef1381004618ab0304d14b3e5"
+      }
+    },
+    "v4": {
+      "src/core/fixed_math.cpp": {
+        "lf_normalized_matches_head": true,
+        "git_blob_sha1": "3e1538582ea77a7ce857aebeaa6c25443d97309f"
+      },
+      "src/core/fixed_math.hpp": {
+        "lf_normalized_matches_head": true,
+        "git_blob_sha1": "5dd14883cb8610071f547df28a566e0abc5b9ae3"
+      },
+      "src/core/pulse_sim.cpp": {
+        "lf_normalized_matches_head": true,
+        "git_blob_sha1": "3e7e045d6950470df0fc23fd17cf489cfb23dd04"
+      },
+      "src/core/pulse_sim.hpp": {
+        "lf_normalized_matches_head": true,
+        "git_blob_sha1": "eb2c2232e8bd66d3ad5f9ec181e64be7ab9c0deb"
+      },
+      "src/core/pulse_replay.cpp": {
+        "lf_normalized_matches_head": true,
+        "git_blob_sha1": "f6033d43957d640eab57927fe1cb8ff32d7e5ef3"
+      },
+      "src/core/pulse_replay.hpp": {
+        "lf_normalized_matches_head": true,
+        "git_blob_sha1": "f48fbfc4d87519253696bf6ecbe1fcbd065e475d"
+      },
+      "src/ai/pulse_ai.cpp": {
+        "lf_normalized_matches_head": true,
+        "git_blob_sha1": "62df6f10361e228c360f9484d6127ea34d1d5c89"
+      },
+      "src/ai/pulse_ai.hpp": {
+        "lf_normalized_matches_head": true,
+        "git_blob_sha1": "1a058e6192a0fe322f31ff2b9b3bbba5dae651ef"
+      }
+    }
+  },
+  "static_action_adapter": {
+    "root_sha256": "231c30f83262e98ba50a0343ac34d4726e75acc6b025be9f6892513be23cca85",
+    "reference_sha256": "231c30f83262e98ba50a0343ac34d4726e75acc6b025be9f6892513be23cca85",
+    "byte_identical": true,
+    "executed": false
+  },
+  "existing_tooling_reused_or_excluded": [
+    {
+      "path": "build/pulse-zero-work/tests/sim_tests.cpp",
+      "sha256": "cd70a9c9a3ac6d2f4a229977defa9a24b814429a8ea785c2adde35bc94557aa8",
+      "use": "Adapted hand-constructed touch/goal fixtures; no frozen evaluation replay."
+    },
+    {
+      "path": "build/pulse-zero-work/training/tests/test_policy_bundle_parity.py",
+      "sha256": "3a8234921d41c013e9f18326a8f1e6ac6f711af9c236559ca46faa71e44aacb0",
+      "use": "Inspected only; exporter/native-inference golden parity does not compare root-v2 to reference-v4 environment contracts."
+    },
+    {
+      "path": "build/pulse-zero-work/training/verify_dll_equivalence.py",
+      "sha256": "c935d6ad6eca239997280828433f9ab6b63c596f1ce72c9239d5db2551fed2f4",
+      "use": "Inspected only; historical v4 replacement-DLL evidence is outside this synthetic contract audit. No model/evaluation rerun."
+    },
+    {
+      "path": "build/pulse-zero-dll-equivalence/.../adjudication-report.json",
+      "sha256": "61fd6e86d6702d998a585d2c0bd50304dfbd8a64abc223b1770a339432e6993a",
+      "use": "Existing saved historical v4 DLL adjudication, not v2/v4 parity. Read only."
+    }
+  ],
+  "review": {
+    "method": "Independent Astra low read-only source and raw-output review",
+    "result": "No remaining concrete defect found in scoped audit",
+    "correction": "Verdict now includes action/mask/metadata differences as well as observation/state differences. Final run used corrected tooling."
+  },
+  "fixture_count": 32,
+  "source_identity_note": "Production inputs identify root 3a3fe53 and reference 9a5dfef plus exact file hashes. Audit tooling was uncommitted during execution, hashed before/after, then committed unchanged as audit_tooling_commit. Reference is a dirty separate clone; all compiled inputs match its committed HEAD after line-ending normalization."
+}
