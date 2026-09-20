@@ -1,6 +1,19 @@
 # Pulse Court project status
 
-## Current checkpoint — 2026-09-18
+## Current checkpoint — 2026-09-20
+
+Local source commit `596d1f5` repairs replay admission: exact file extent is
+validated before tick allocation, malformed/trailing payloads fail with precise
+diagnostics, and failed loads preserve the caller's replay. Release and Debug
+each passed all four suites; both rebuilt headless tools verified the unchanged
+5,720-tick public replay and rejected the bounded malformed fixtures. Independent
+read-only review found no material issues. No push or deployment performed.
+
+The [replay admission handoff](replay-admission-2026-09-20/README.md) records
+commands, source/test/executable hashes, results, and scope limits. Simulation,
+policy, viewer, ruleset migration, and training evidence were unchanged.
+
+## Previous checkpoint — 2026-09-18
 
 Branch `codex/preview-runtime-fixes`, executable source `661f35d`.
 The launcher, strict runtime compatibility, and smoke-controller fixes below

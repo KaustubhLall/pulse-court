@@ -1,0 +1,348 @@
+{
+  "schema_version": 1,
+  "status": "PASS",
+  "scope": "Replay structural admission only; no simulation, policy, viewer, or ruleset migration",
+  "recorded_utc": "2026-09-20T20:13:39.549479+00:00",
+  "source_commit": "596d1f5e8d139bfb39c981e2296f0e8430a7e889",
+  "branch": "codex/preview-runtime-fixes",
+  "source_files": {
+    "src/core/pulse_replay.cpp": {
+      "worktree_sha256": "a50b1aeb1718d39aef1ca258767902e483788e79db56be231c4d817c023c05c4",
+      "git_blob_sha1": "5e3308c482a60f8f321abdab17488ffd8b1f3218",
+      "lf_normalized_sha256": "1c15a87d2e76f692eb8aee7c967d7d85b7bfc2ca269ac39eb4e313397de95021"
+    },
+    "src/core/pulse_replay.hpp": {
+      "worktree_sha256": "795e7435eb32173a0b05fff27fba531f99e4a3980abf4c9a258f01d9bebc0268",
+      "git_blob_sha1": "6e085b51bc3631f4bf6308398a7a2956f073636d",
+      "lf_normalized_sha256": "795e7435eb32173a0b05fff27fba531f99e4a3980abf4c9a258f01d9bebc0268"
+    },
+    "tests/sim_tests.cpp": {
+      "worktree_sha256": "c3b0cd1ee525f745ed2fce8b3540725dd23531a63b93de8061c1fcc5047b4d84",
+      "git_blob_sha1": "d41be2d95194402d4712cc0329b107a17f121c16",
+      "lf_normalized_sha256": "c3b0cd1ee525f745ed2fce8b3540725dd23531a63b93de8061c1fcc5047b4d84"
+    }
+  },
+  "executables_sha256": {
+    "build/release/Release/pulse_headless.exe": "1df10b9b0625341d69087953b605ab9c96f14b805ea57ed1b19930b009650c0f",
+    "build/debug/Debug/pulse_headless.exe": "ac6ef9467e902756ace20b6621d70419a3216d7598c853fdc5dcec3803c76179",
+    "build/release/Release/pulse_tests.exe": "d815fb69cbb25595ae84b726ba740527340d1ffd5946e0f6a30742d4adb2141a",
+    "build/debug/Debug/pulse_tests.exe": "1c79daf6888d47963883351d936efb68b3d48735e5bbfb13666222808b2fceb2"
+  },
+  "baseline": {
+    "baseline_commit": "d84c1e4f1bf5ac7f4ccabe5a6e0a5f3fe6a18a22",
+    "executable_sha256": "784bef895a263ed08b91a186d80b3905827ccf1b9a6cd868e10d9aa3f0ae15b2",
+    "probes": [
+      {
+        "case": "appended-byte",
+        "exit_code": 0,
+        "stdout": "replay verified: 5720 ticks OK\n",
+        "stderr": ""
+      },
+      {
+        "case": "truncated-hash",
+        "exit_code": 1,
+        "stdout": "",
+        "stderr": "replay load failed: replay hash truncated\n"
+      }
+    ],
+    "huge_count_executed": false,
+    "source_identity_note": "Preexisting executable; not independently rebuilt from baseline commit for the before probe."
+  },
+  "build_and_ctest": [
+    {
+      "argv": [
+        "<cmake>/cmake.exe",
+        "--build",
+        "<repo>\\build\\release",
+        "--config",
+        "Release"
+      ],
+      "exit_code": 0,
+      "stdout": "MSBuild version 18.3.0-release-26070-10+3972042b7 for .NET Framework\n\n  pulse_core.vcxproj -> <repo>\\build\\release\\Release\\pulse_core.lib\n  pulse_ai.vcxproj -> <repo>\\build\\release\\Release\\pulse_ai.lib\n  pulse_policy.vcxproj -> <repo>\\build\\release\\Release\\pulse_policy.lib\n  pulse_challenge.vcxproj -> <repo>\\build\\release\\Release\\pulse_challenge.lib\n  pulse_challenge_protocol_tests.vcxproj -> <repo>\\build\\release\\Release\\pulse_challenge_protocol_tests.exe\n  pulse_policy_devgen.vcxproj -> <repo>\\build\\release\\Release\\pulse_policy_devgen.lib\n  pulse_challenge_tests.vcxproj -> <repo>\\build\\release\\Release\\pulse_challenge_tests.exe\n  pulse_dev_bundle.vcxproj -> <repo>\\build\\release\\Release\\pulse_dev_bundle.exe\n  pulse_headless.vcxproj -> <repo>\\build\\release\\Release\\pulse_headless.exe\n  pulse_policy_tests.vcxproj -> <repo>\\build\\release\\Release\\pulse_policy_tests.exe\n  pulse_policy_verify.vcxproj -> <repo>\\build\\release\\Release\\pulse_policy_verify.exe\n  sim_tests.cpp\n<repo>\\tests\\sim_tests.cpp(99,9): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\release\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(116,13): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\release\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(124,14): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\release\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(139,13): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\release\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(150,14): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\release\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(161,13): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\release\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(272,9): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\release\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(302,13): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\release\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(316,17): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\release\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(334,13): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\release\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(345,13): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\release\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(382,13): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\release\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(406,13): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\release\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(422,13): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\release\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(489,13): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\release\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(512,13): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\release\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(526,14): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\release\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(564,13): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\release\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(763,9): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\release\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(768,38): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\release\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(769,9): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\release\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(791,9): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\release\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(803,9): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\release\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(822,14): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\release\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(840,14): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\release\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(862,9): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\release\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(884,13): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\release\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(905,13): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\release\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(933,17): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\release\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(958,13): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\release\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(989,14): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\release\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(990,14): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\release\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(1005,13): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\release\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(1017,13): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\release\\pulse_tests.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244: 'initializing': conversion from '_Ty' to '_Ty1', possible loss of data [<repo>\\build\\release\\pulse_tests.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:         with [<repo>\\build\\release\\pulse_tests.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:         [ [<repo>\\build\\release\\pulse_tests.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:             _Ty=int [<repo>\\build\\release\\pulse_tests.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:         ] [<repo>\\build\\release\\pulse_tests.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:         and [<repo>\\build\\release\\pulse_tests.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:         [ [<repo>\\build\\release\\pulse_tests.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:             _Ty1=signed char [<repo>\\build\\release\\pulse_tests.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:         ] [<repo>\\build\\release\\pulse_tests.vcxproj]\n  (compiling source file '../../tests/sim_tests.cpp')\n      C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16):\n      the template instantiation context (the oldest one first) is\n          <repo>\\tests\\sim_tests.cpp(43,21):\n          see reference to function template instantiation 'std::pair<signed char,signed char>::pair<int,int,0>(_Other1 &&,_Other2 &&) noexcept' being compiled\n          with\n          [\n              _Other1=int,\n              _Other2=int\n          ]\n              <repo>\\tests\\sim_tests.cpp(43,21):\n              see the first reference to 'std::pair<signed char,signed char>::pair' in 'pulse::tests::scripted::<lambda_1>::operator ()'\n  \nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244: 'initializing': conversion from '_Ty' to '_Ty2', possible loss of data [<repo>\\build\\release\\pulse_tests.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:         with [<repo>\\build\\release\\pulse_tests.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:         [ [<repo>\\build\\release\\pulse_tests.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:             _Ty=int [<repo>\\build\\release\\pulse_tests.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:         ] [<repo>\\build\\release\\pulse_tests.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:         and [<repo>\\build\\release\\pulse_tests.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:         [ [<repo>\\build\\release\\pulse_tests.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:             _Ty2=signed char [<repo>\\build\\release\\pulse_tests.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:         ] [<repo>\\build\\release\\pulse_tests.vcxproj]\n  (compiling source file '../../tests/sim_tests.cpp')\n  \n  pulse_tests.vcxproj -> <repo>\\build\\release\\Release\\pulse_tests.exe\n  pulse_viewer.vcxproj -> <repo>\\build\\release\\Release\\pulse_viewer.exe\n  Copying assets next to viewer executable\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "<cmake>/ctest.exe",
+        "--test-dir",
+        "<repo>\\build\\release",
+        "-C",
+        "Release",
+        "--output-on-failure",
+        "--timeout",
+        "90"
+      ],
+      "exit_code": 0,
+      "stdout": "Test project <repo>/build/release\n    Start 1: pulse_tests\n1/4 Test #1: pulse_tests ......................   Passed    0.19 sec\n    Start 2: pulse_challenge_tests\n2/4 Test #2: pulse_challenge_tests ............   Passed    2.77 sec\n    Start 3: pulse_policy_tests\n3/4 Test #3: pulse_policy_tests ...............   Passed    0.73 sec\n    Start 4: pulse_challenge_protocol_tests\n4/4 Test #4: pulse_challenge_protocol_tests ...   Passed    0.25 sec\n\n100% tests passed, 0 tests failed out of 4\n\nTotal Test time (real) =   3.97 sec\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "<cmake>/cmake.exe",
+        "--build",
+        "<repo>\\build\\debug",
+        "--config",
+        "Debug"
+      ],
+      "exit_code": 0,
+      "stdout": "MSBuild version 18.3.0-release-26070-10+3972042b7 for .NET Framework\n\n  pulse_core.vcxproj -> <repo>\\build\\debug\\Debug\\pulse_core.lib\n  pulse_ai.vcxproj -> <repo>\\build\\debug\\Debug\\pulse_ai.lib\n  pulse_policy.vcxproj -> <repo>\\build\\debug\\Debug\\pulse_policy.lib\n  pulse_challenge.vcxproj -> <repo>\\build\\debug\\Debug\\pulse_challenge.lib\n  pulse_challenge_protocol_tests.vcxproj -> <repo>\\build\\debug\\Debug\\pulse_challenge_protocol_tests.exe\n  pulse_policy_devgen.vcxproj -> <repo>\\build\\debug\\Debug\\pulse_policy_devgen.lib\n  pulse_challenge_tests.vcxproj -> <repo>\\build\\debug\\Debug\\pulse_challenge_tests.exe\n  pulse_dev_bundle.vcxproj -> <repo>\\build\\debug\\Debug\\pulse_dev_bundle.exe\n  pulse_headless.vcxproj -> <repo>\\build\\debug\\Debug\\pulse_headless.exe\n  pulse_policy_tests.vcxproj -> <repo>\\build\\debug\\Debug\\pulse_policy_tests.exe\n  pulse_policy_verify.vcxproj -> <repo>\\build\\debug\\Debug\\pulse_policy_verify.exe\n  sim_tests.cpp\n<repo>\\tests\\sim_tests.cpp(99,9): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\debug\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(116,13): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\debug\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(124,14): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\debug\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(139,13): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\debug\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(150,14): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\debug\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(161,13): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\debug\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(272,9): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\debug\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(302,13): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\debug\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(316,17): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\debug\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(334,13): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\debug\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(345,13): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\debug\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(382,13): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\debug\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(406,13): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\debug\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(422,13): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\debug\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(489,13): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\debug\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(512,13): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\debug\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(526,14): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\debug\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(564,13): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\debug\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(763,9): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\debug\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(768,38): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\debug\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(769,9): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\debug\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(791,9): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\debug\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(803,9): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\debug\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(822,14): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\debug\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(840,14): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\debug\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(862,9): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\debug\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(884,13): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\debug\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(905,13): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\debug\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(933,17): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\debug\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(958,13): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\debug\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(989,14): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\debug\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(990,14): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\debug\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(1005,13): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\debug\\pulse_tests.vcxproj]\n<repo>\\tests\\sim_tests.cpp(1017,13): warning C4834: discarding return value of function with [[nodiscard]] attribute [<repo>\\build\\debug\\pulse_tests.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244: 'initializing': conversion from '_Ty' to '_Ty1', possible loss of data [<repo>\\build\\debug\\pulse_tests.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:         with [<repo>\\build\\debug\\pulse_tests.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:         [ [<repo>\\build\\debug\\pulse_tests.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:             _Ty=int [<repo>\\build\\debug\\pulse_tests.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:         ] [<repo>\\build\\debug\\pulse_tests.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:         and [<repo>\\build\\debug\\pulse_tests.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:         [ [<repo>\\build\\debug\\pulse_tests.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:             _Ty1=signed char [<repo>\\build\\debug\\pulse_tests.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16): warning C4244:         ] [<repo>\\build\\debug\\pulse_tests.vcxproj]\n  (compiling source file '../../tests/sim_tests.cpp')\n      C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,16):\n      the template instantiation context (the oldest one first) is\n          <repo>\\tests\\sim_tests.cpp(43,21):\n          see reference to function template instantiation 'std::pair<signed char,signed char>::pair<int,int,0>(_Other1 &&,_Other2 &&) noexcept' being compiled\n          with\n          [\n              _Other1=int,\n              _Other2=int\n          ]\n              <repo>\\tests\\sim_tests.cpp(43,21):\n              see the first reference to 'std::pair<signed char,signed char>::pair' in 'pulse::tests::scripted::<lambda_1>::operator ()'\n  \nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244: 'initializing': conversion from '_Ty' to '_Ty2', possible loss of data [<repo>\\build\\debug\\pulse_tests.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:         with [<repo>\\build\\debug\\pulse_tests.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:         [ [<repo>\\build\\debug\\pulse_tests.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:             _Ty=int [<repo>\\build\\debug\\pulse_tests.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:         ] [<repo>\\build\\debug\\pulse_tests.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:         and [<repo>\\build\\debug\\pulse_tests.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:         [ [<repo>\\build\\debug\\pulse_tests.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:             _Ty2=signed char [<repo>\\build\\debug\\pulse_tests.vcxproj]\nC:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\include\\utility(274,54): warning C4244:         ] [<repo>\\build\\debug\\pulse_tests.vcxproj]\n  (compiling source file '../../tests/sim_tests.cpp')\n  \n  pulse_tests.vcxproj -> <repo>\\build\\debug\\Debug\\pulse_tests.exe\n  pulse_viewer.vcxproj -> <repo>\\build\\debug\\Debug\\pulse_viewer.exe\n  Copying assets next to viewer executable\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "<cmake>/ctest.exe",
+        "--test-dir",
+        "<repo>\\build\\debug",
+        "-C",
+        "Debug",
+        "--output-on-failure",
+        "--timeout",
+        "90"
+      ],
+      "exit_code": 0,
+      "stdout": "Test project <repo>/build/debug\n    Start 1: pulse_tests\n1/4 Test #1: pulse_tests ......................   Passed    0.28 sec\n    Start 2: pulse_challenge_tests\n2/4 Test #2: pulse_challenge_tests ............   Passed   17.91 sec\n    Start 3: pulse_policy_tests\n3/4 Test #3: pulse_policy_tests ...............   Passed    5.61 sec\n    Start 4: pulse_challenge_protocol_tests\n4/4 Test #4: pulse_challenge_protocol_tests ...   Passed    0.29 sec\n\n100% tests passed, 0 tests failed out of 4\n\nTotal Test time (real) =  24.12 sec\n",
+      "stderr": ""
+    }
+  ],
+  "native_checks": {
+    "observed_utc": "2026-09-20T20:12:09.893473+00:00",
+    "public_replay_sha256_before": "35af43287d7c8ae9f4e13d3103fc0f38d62d18b4d41d4a275534aff78c695f28",
+    "public_replay_bytes": 102994,
+    "commands": [
+      {
+        "case": "public-historical",
+        "configuration": "Release",
+        "argv": [
+          "<repo>\\build\\release\\Release\\pulse_headless.exe",
+          "--replay",
+          "<portfolio>\\public\\data\\pulse-court\\synthetic-preview.pulse"
+        ],
+        "exit_code": 0,
+        "stdout": "replay verified: 5720 ticks OK\n",
+        "stderr": "",
+        "expected_exit_code": 0,
+        "passed": true
+      },
+      {
+        "case": "appended-byte",
+        "configuration": "Release",
+        "argv": [
+          "<repo>\\build\\release\\Release\\pulse_headless.exe",
+          "--replay",
+          "<repo>\\build\\replay-admission-2026-09-20\\fixed-appended-byte.pulse"
+        ],
+        "exit_code": 1,
+        "stdout": "",
+        "stderr": "replay load failed: replay has trailing bytes\n",
+        "expected_exit_code": 1,
+        "passed": true
+      },
+      {
+        "case": "truncated-header",
+        "configuration": "Release",
+        "argv": [
+          "<repo>\\build\\release\\Release\\pulse_headless.exe",
+          "--replay",
+          "<repo>\\build\\replay-admission-2026-09-20\\fixed-truncated-header.pulse"
+        ],
+        "exit_code": 1,
+        "stdout": "",
+        "stderr": "replay load failed: replay header truncated\n",
+        "expected_exit_code": 1,
+        "passed": true
+      },
+      {
+        "case": "truncated-frame",
+        "configuration": "Release",
+        "argv": [
+          "<repo>\\build\\release\\Release\\pulse_headless.exe",
+          "--replay",
+          "<repo>\\build\\replay-admission-2026-09-20\\fixed-truncated-frame.pulse"
+        ],
+        "exit_code": 1,
+        "stdout": "",
+        "stderr": "replay load failed: replay frame truncated\n",
+        "expected_exit_code": 1,
+        "passed": true
+      },
+      {
+        "case": "truncated-hash",
+        "configuration": "Release",
+        "argv": [
+          "<repo>\\build\\release\\Release\\pulse_headless.exe",
+          "--replay",
+          "<repo>\\build\\replay-admission-2026-09-20\\fixed-truncated-hash.pulse"
+        ],
+        "exit_code": 1,
+        "stdout": "",
+        "stderr": "replay load failed: replay hash truncated\n",
+        "expected_exit_code": 1,
+        "passed": true
+      },
+      {
+        "case": "forged-max-count",
+        "configuration": "Release",
+        "argv": [
+          "<repo>\\build\\release\\Release\\pulse_headless.exe",
+          "--replay",
+          "<repo>\\build\\replay-admission-2026-09-20\\fixed-forged-max-count.pulse"
+        ],
+        "exit_code": 1,
+        "stdout": "",
+        "stderr": "replay load failed: replay frame truncated\n",
+        "expected_exit_code": 1,
+        "passed": true
+      },
+      {
+        "case": "zero-tick",
+        "configuration": "Release",
+        "argv": [
+          "<repo>\\build\\release\\Release\\pulse_headless.exe",
+          "--replay",
+          "<repo>\\build\\replay-admission-2026-09-20\\fixed-zero-tick.pulse"
+        ],
+        "exit_code": 0,
+        "stdout": "replay verified: 0 ticks OK\n",
+        "stderr": "",
+        "expected_exit_code": 0,
+        "passed": true
+      },
+      {
+        "case": "public-historical",
+        "configuration": "Debug",
+        "argv": [
+          "<repo>\\build\\debug\\Debug\\pulse_headless.exe",
+          "--replay",
+          "<portfolio>\\public\\data\\pulse-court\\synthetic-preview.pulse"
+        ],
+        "exit_code": 0,
+        "stdout": "replay verified: 5720 ticks OK\n",
+        "stderr": "",
+        "expected_exit_code": 0,
+        "passed": true
+      },
+      {
+        "case": "appended-byte",
+        "configuration": "Debug",
+        "argv": [
+          "<repo>\\build\\debug\\Debug\\pulse_headless.exe",
+          "--replay",
+          "<repo>\\build\\replay-admission-2026-09-20\\fixed-appended-byte.pulse"
+        ],
+        "exit_code": 1,
+        "stdout": "",
+        "stderr": "replay load failed: replay has trailing bytes\n",
+        "expected_exit_code": 1,
+        "passed": true
+      },
+      {
+        "case": "truncated-header",
+        "configuration": "Debug",
+        "argv": [
+          "<repo>\\build\\debug\\Debug\\pulse_headless.exe",
+          "--replay",
+          "<repo>\\build\\replay-admission-2026-09-20\\fixed-truncated-header.pulse"
+        ],
+        "exit_code": 1,
+        "stdout": "",
+        "stderr": "replay load failed: replay header truncated\n",
+        "expected_exit_code": 1,
+        "passed": true
+      },
+      {
+        "case": "truncated-frame",
+        "configuration": "Debug",
+        "argv": [
+          "<repo>\\build\\debug\\Debug\\pulse_headless.exe",
+          "--replay",
+          "<repo>\\build\\replay-admission-2026-09-20\\fixed-truncated-frame.pulse"
+        ],
+        "exit_code": 1,
+        "stdout": "",
+        "stderr": "replay load failed: replay frame truncated\n",
+        "expected_exit_code": 1,
+        "passed": true
+      },
+      {
+        "case": "truncated-hash",
+        "configuration": "Debug",
+        "argv": [
+          "<repo>\\build\\debug\\Debug\\pulse_headless.exe",
+          "--replay",
+          "<repo>\\build\\replay-admission-2026-09-20\\fixed-truncated-hash.pulse"
+        ],
+        "exit_code": 1,
+        "stdout": "",
+        "stderr": "replay load failed: replay hash truncated\n",
+        "expected_exit_code": 1,
+        "passed": true
+      },
+      {
+        "case": "forged-max-count",
+        "configuration": "Debug",
+        "argv": [
+          "<repo>\\build\\debug\\Debug\\pulse_headless.exe",
+          "--replay",
+          "<repo>\\build\\replay-admission-2026-09-20\\fixed-forged-max-count.pulse"
+        ],
+        "exit_code": 1,
+        "stdout": "",
+        "stderr": "replay load failed: replay frame truncated\n",
+        "expected_exit_code": 1,
+        "passed": true
+      },
+      {
+        "case": "zero-tick",
+        "configuration": "Debug",
+        "argv": [
+          "<repo>\\build\\debug\\Debug\\pulse_headless.exe",
+          "--replay",
+          "<repo>\\build\\replay-admission-2026-09-20\\fixed-zero-tick.pulse"
+        ],
+        "exit_code": 0,
+        "stdout": "replay verified: 0 ticks OK\n",
+        "stderr": "",
+        "expected_exit_code": 0,
+        "passed": true
+      }
+    ],
+    "executable_sha256": {
+      "build/release/Release/pulse_headless.exe": "1df10b9b0625341d69087953b605ab9c96f14b805ea57ed1b19930b009650c0f",
+      "build/debug/Debug/pulse_headless.exe": "ac6ef9467e902756ace20b6621d70419a3216d7598c853fdc5dcec3803c76179"
+    },
+    "public_replay_sha256_after": "35af43287d7c8ae9f4e13d3103fc0f38d62d18b4d41d4a275534aff78c695f28"
+  },
+  "test_coverage": {
+    "all_proper_prefixes_of_70_byte_fixture": 70,
+    "huge_counts_in_34_byte_files": [
+      268435455,
+      2147483648,
+      4294967295
+    ],
+    "always_active_in_release": true,
+    "release_ctest_suites_passed": 4,
+    "debug_ctest_suites_passed": 4,
+    "native_checks_passed": 14,
+    "other_cases": [
+      "trailing byte including zero-tick replay",
+      "populated destination preserved on all rejected fixtures",
+      "invalid magic, format, ruleset, missing file",
+      "valid replay after failure clears stale error",
+      "byte-identical load-save roundtrip",
+      "zero-tick replay accepted"
+    ]
+  },
+  "limitations": [
+    "Structural admission is separate from deterministic hash verification.",
+    "No semantic input validator, file-size quota, allocation-exception policy, or concurrent-file snapshot guarantee added.",
+    "Existing nodiscard/conversion warnings remain in unchanged tests/helper code; clang-tidy and cppcheck unavailable in PATH.",
+    "No policy promotion, fresh model evaluation/training/holdout, visual acceptance, ruleset-v4 certification, or model-strength claim.",
+    "Public historical replay read only; source and evidence commits remain local, no push or deployment."
+  ],
+  "command_placeholders": {
+    "<repo>": "Pulse Court repository root",
+    "<portfolio>": "Personal website repository root",
+    "<cmake>": "Installed CMake bin directory"
+  },
+  "build_environment": "Commands executed with Python subprocess and env=dict(os.environ) to collapse duplicate Path/PATH keys; no machine environment change."
+}
