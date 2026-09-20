@@ -3,6 +3,7 @@
 #include <cstring>
 #include <fstream>
 #include <sstream>
+#include <utility>
 #include <vector>
 
 namespace pulse {
@@ -10,6 +11,8 @@ namespace pulse {
 namespace {
 
 constexpr char kReplayMagic[8] = {'P', 'U', 'L', 'S', 'E', 'R', 'P', 'L'};
+constexpr std::uint64_t kReplayHeaderBytes = 34;
+constexpr std::uint64_t kReplayTickBytes = 18;  // Two 5-byte inputs + 8-byte hash.
 
 void write_u32(std::ofstream& out, std::uint32_t v) {
     out.write(reinterpret_cast<const char*>(&v), sizeof(v));
@@ -92,6 +95,16 @@ bool load_replay(const std::string& path, Replay& replay, std::string& error) {
         return false;
     }
 
+    const auto end = in.tellg();
+    if (end < std::streampos(0)) {
+        error = "failed to determine replay size";
+        return false;
+    }
+    const auto file_bytes = static_cast<std::uint64_t>(end);
+    if (file_bytes < kReplayHeaderBytes) {
+        error = "replay header truncated";
+        return false;
+    }
     in.seekg(0, std::ios::beg);
     char magic[sizeof(kReplayMagic)] = {};
     in.read(magic, sizeof(magic));
@@ -127,15 +140,29 @@ bool load_replay(const std::string& path, Replay& replay, std::string& error) {
         return false;
     }
 
-    replay = Replay{};
-    replay.format_version = format_version;
-    replay.ruleset_version = ruleset_version;
-    replay.characters[0] = static_cast<Character>(left_char);
-    replay.characters[1] = static_cast<Character>(right_char);
-    replay.config.score_to_win = score_to_win;
-    replay.config.regulation_ticks = regulation_ticks;
-    replay.config.kickoff_ticks = kickoff_ticks;
-    replay.ticks.resize(tick_count);
+    // Widen before multiplying: even UINT32_MAX ticks fit in uint64_t.
+    // Validate the complete on-disk extent before allocating from this count.
+    const std::uint64_t expected_bytes =
+        kReplayHeaderBytes + static_cast<std::uint64_t>(tick_count) * kReplayTickBytes;
+    if (file_bytes < expected_bytes) {
+        const auto partial_tick_bytes = (file_bytes - kReplayHeaderBytes) % kReplayTickBytes;
+        error = partial_tick_bytes < 10 ? "replay frame truncated" : "replay hash truncated";
+        return false;
+    }
+    if (file_bytes > expected_bytes) {
+        error = "replay has trailing bytes";
+        return false;
+    }
+
+    Replay parsed;
+    parsed.format_version = format_version;
+    parsed.ruleset_version = ruleset_version;
+    parsed.characters[0] = static_cast<Character>(left_char);
+    parsed.characters[1] = static_cast<Character>(right_char);
+    parsed.config.score_to_win = score_to_win;
+    parsed.config.regulation_ticks = regulation_ticks;
+    parsed.config.kickoff_ticks = kickoff_ticks;
+    parsed.ticks.resize(tick_count);
 
     for (std::uint32_t i = 0; i < tick_count; ++i) {
         for (std::size_t p = 0; p < 2; ++p) {
@@ -145,14 +172,14 @@ bool load_replay(const std::string& path, Replay& replay, std::string& error) {
                 error = "replay frame truncated";
                 return false;
             }
-            auto& fi = replay.ticks[i].inputs[p];
+            auto& fi = parsed.ticks[i].inputs[p];
             fi.move_x = static_cast<std::int8_t>(mx);
             fi.move_y = static_cast<std::int8_t>(my);
             fi.aim_x = static_cast<std::int8_t>(ax);
             fi.aim_y = static_cast<std::int8_t>(ay);
             fi.buttons = bt;
         }
-        if (!read_u64(in, replay.ticks[i].expected_hash)) {
+        if (!read_u64(in, parsed.ticks[i].expected_hash)) {
             error = "replay hash truncated";
             return false;
         }
@@ -162,6 +189,17 @@ bool load_replay(const std::string& path, Replay& replay, std::string& error) {
         error = "replay file corrupted";
         return false;
     }
+    // Also reject growth since tellg(); reads above detect concurrent truncation.
+    if (in.peek() != std::char_traits<char>::eof()) {
+        error = "replay has trailing bytes";
+        return false;
+    }
+    if (in.bad()) {
+        error = "replay file corrupted";
+        return false;
+    }
+    replay = std::move(parsed);
+    error.clear();
     return true;
 }
 

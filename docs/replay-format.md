@@ -39,3 +39,14 @@ The above 5 bytes are repeated for player 0 then player 1, followed by:
 `load_replay` rejects files whose magic, `format_version`, or `ruleset_version`
 do not match the current `pulse_core` expectations. This prevents silent match
 outcome drift between versions.
+
+Format v1 requires exactly `34 + 18 * tick_count` bytes, including a valid
+34-byte header when the count is zero. The loader widens the uint32 count
+before computing this extent and checks it before allocating tick storage.
+Short files report a truncated header, frame input, or hash; extra bytes are
+rejected. Parsing uses a temporary replay: a failed load preserves the caller's
+destination, while a successful load replaces it and clears the error string.
+
+This is structural admission, separate from `verify_replay`'s simulation/hash
+check. It does not add a semantic input validator, a file-size quota, or a
+snapshot guarantee for files being modified concurrently.

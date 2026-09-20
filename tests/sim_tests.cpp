@@ -9,6 +9,7 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -602,6 +603,125 @@ void test_replay() {
     std::remove(path.c_str());
 }
 
+void test_replay_admission() {
+    const std::string path = "test_replay_admission.pulse";
+    const std::string roundtrip_path = "test_replay_admission_roundtrip.pulse";
+    auto read_bytes = [](const std::string& file) {
+        std::ifstream in(file, std::ios::binary);
+        return std::vector<char>(std::istreambuf_iterator<char>(in), {});
+    };
+    auto write_bytes = [&](const std::vector<char>& bytes) {
+        std::ofstream out(path, std::ios::binary | std::ios::trunc);
+        out.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+        out.close();
+        check(static_cast<bool>(out), "admission fixture write succeeds");
+    };
+    auto same_replay = [](const Replay& a, const Replay& b) {
+        if (a.format_version != b.format_version || a.ruleset_version != b.ruleset_version ||
+            a.characters != b.characters || a.config != b.config || a.ticks.size() != b.ticks.size()) {
+            return false;
+        }
+        for (std::size_t i = 0; i < a.ticks.size(); ++i) {
+            if (a.ticks[i].inputs != b.ticks[i].inputs ||
+                a.ticks[i].expected_hash != b.ticks[i].expected_hash) return false;
+        }
+        return true;
+    };
+
+    Replay original;
+    original.characters = {Character::Bastion, Character::Kite};
+    original.config = {3, 500, 7};
+    Simulation sim(original.characters, original.config);
+    for (std::uint32_t i = 0; i < 2; ++i) {
+        const std::array<FrameInput, 2> inputs = {scripted(i, 0), scripted(i, 1)};
+        (void)sim.step(inputs);
+        original.ticks.push_back({inputs, sim.state_hash()});
+    }
+    std::string error;
+    if (!save_replay(original, path, error)) {
+        check(false, "admission fixture save succeeds");
+        return;
+    }
+    const auto valid = read_bytes(path);
+    check(valid.size() == 70, "two-tick format-v1 replay is exactly 70 bytes");
+    if (valid.size() != 70) return;
+
+    // Use a populated, deliberately different destination, including all fields.
+    Replay sentinel = original;
+    sentinel.format_version = 77;
+    sentinel.ruleset_version = 88;
+    sentinel.characters = {Character::Vale, Character::Bastion};
+    sentinel.config = {9, 43, 2};
+    sentinel.ticks.resize(1);
+    sentinel.ticks[0].inputs[0] = {-1, 1, 1, -1, ButtonDash};
+    sentinel.ticks[0].expected_hash = 0xFEDCBA9876543210ull;
+    Replay destination = sentinel;
+    auto reject = [&](const std::vector<char>& bytes, const char* expected_error) {
+        write_bytes(bytes);
+        error = "stale diagnostic";
+        check(!load_replay(path, destination, error), "malformed replay rejected");
+        check(error == expected_error, "malformed replay has precise diagnostic");
+        check(same_replay(destination, sentinel), "failed admission preserves entire destination");
+    };
+
+    // Exhaust every proper prefix: header, either player's input, and hashes.
+    for (std::size_t size = 0; size < valid.size(); ++size) {
+        const auto expected = size < 34 ? "replay header truncated" :
+            (size - 34) % 18 < 10 ? "replay frame truncated" : "replay hash truncated";
+        reject(std::vector<char>(valid.begin(), valid.begin() + size), expected);
+    }
+    auto extra = valid;
+    extra.push_back('X');
+    reject(extra, "replay has trailing bytes");
+
+    // Tiny files cannot admit large untrusted counts. These run only on the repaired loader.
+    for (std::uint32_t count : {0x0FFFFFFFu, 0x80000000u, 0xFFFFFFFFu}) {
+        std::vector<char> forged(valid.begin(), valid.begin() + 34);
+        for (unsigned byte = 0; byte < 4; ++byte) {
+            forged[30 + byte] = static_cast<char>((count >> (8 * byte)) & 0xFFu);
+        }
+        reject(forged, "replay frame truncated");
+    }
+    auto bad_magic = valid;
+    bad_magic[0] = 'X';
+    reject(bad_magic, "replay has invalid magic");
+    auto bad_format = valid;
+    bad_format[8] = 99;
+    reject(bad_format, "incompatible replay format version");
+    auto bad_ruleset = valid;
+    bad_ruleset[12] = 99;
+    reject(bad_ruleset, "incompatible ruleset version");
+    std::remove(path.c_str());
+    check(!load_replay(path, destination, error), "missing replay rejected");
+    check(same_replay(destination, sentinel), "open failure preserves destination");
+
+    write_bytes(valid);
+    const bool loaded = load_replay(path, destination, error);
+    check(loaded, "valid replay succeeds after repeated admission failures");
+    check(error.empty(), "successful admission clears stale diagnostic");
+    check(same_replay(destination, original), "successful admission replaces entire destination");
+    if (loaded) {
+        check(verify_replay(destination).ok, "admitted replay retains deterministic hashes");
+        check(save_replay(destination, roundtrip_path, error), "admitted replay saves");
+        check(read_bytes(roundtrip_path) == valid, "valid replay bytes survive load-save roundtrip");
+    }
+
+    Replay empty = original;
+    empty.ticks.clear();
+    check(save_replay(empty, path, error), "zero-tick replay saves");
+    const auto empty_bytes = read_bytes(path);
+    check(empty_bytes.size() == 34, "zero-tick replay is exactly one header");
+    error = "stale diagnostic";
+    check(load_replay(path, destination, error), "zero-tick replay admitted");
+    check(same_replay(destination, empty) && error.empty(), "zero-tick load replaces prior ticks and clears error");
+    destination = sentinel;
+    auto empty_extra = empty_bytes;
+    empty_extra.push_back('X');
+    reject(empty_extra, "replay has trailing bytes");
+    std::remove(path.c_str());
+    std::remove(roundtrip_path.c_str());
+}
+
 void test_court_geometry() {
     // Verify 38x22 court dimensions and goal mouth positions.
     check(kFieldWidth == 38 * kFixedScale, "field width is 38 units");
@@ -919,6 +1039,7 @@ int main() {
     test_abilities();
     test_action_space();
     test_replay();
+    test_replay_admission();
     test_court_geometry();
     test_decision_boundary();
     test_action_events();

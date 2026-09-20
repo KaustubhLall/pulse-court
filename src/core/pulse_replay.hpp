@@ -33,6 +33,7 @@ struct ReplayVerification {
 };
 
 [[nodiscard]] bool save_replay(const Replay& replay, const std::string& path, std::string& error);
+// Requires an exact format-v1 extent. Failure preserves replay; success clears error.
 [[nodiscard]] bool load_replay(const std::string& path, Replay& replay, std::string& error);
 [[nodiscard]] ReplayVerification verify_replay(const Replay& replay, MatchConfig config = {});
 
