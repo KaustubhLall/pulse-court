@@ -1,0 +1,27 @@
+cmake_minimum_required(VERSION 3.24)
+project(PulseRulesetContractAudit LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+if(NOT PULSE_ROOT OR NOT PULSE_REFERENCE)
+  message(FATAL_ERROR "PULSE_ROOT and PULSE_REFERENCE are required source directories")
+endif()
+foreach(variant IN ITEMS v2 v4)
+  if(variant STREQUAL "v2")
+    set(source "${PULSE_ROOT}")
+    set(version 2)
+  else()
+    set(source "${PULSE_REFERENCE}")
+    set(version 4)
+  endif()
+  add_executable(audit_${variant} probe.cpp
+    "${source}/src/core/fixed_math.cpp"
+    "${source}/src/core/pulse_sim.cpp"
+    "${source}/src/core/pulse_replay.cpp"
+    "${source}/src/ai/pulse_ai.cpp")
+  target_include_directories(audit_${variant} PRIVATE "${source}/src/core" "${source}/src/ai")
+  target_compile_definitions(audit_${variant} PRIVATE AUDIT_RULESET=${version})
+  if(MSVC)
+    target_compile_options(audit_${variant} PRIVATE /W4 /permissive- /EHsc /Zc:__cplusplus)
+  endif()
+endforeach()
